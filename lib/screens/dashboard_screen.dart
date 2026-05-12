@@ -8,6 +8,7 @@ import 'import_screen.dart';
 import 'reports_screen.dart';
 import 'tax_screen.dart';
 import 'financial_records_screen.dart';
+import 'sync_screen.dart';
 import 'activation_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -48,6 +49,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  Future<void> _refreshData() async {
+    setState(() => _loading = true);
+    await _loadData();
+  }
+
   void _logout() {
     LicenseService.deactivate();
     Navigator.pushReplacement(
@@ -63,6 +69,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: Text(_license?.ownerName ?? 'MIPYME Windows'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshData,
+            tooltip: 'Actualizar datos',
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _logout,
             tooltip: 'Desactivar',
@@ -76,15 +87,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Bienvenido, ${_license?.ownerName ?? "Usuario"}',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  // Información de la licencia
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Bienvenido, ${_license?.ownerName ?? "Usuario"}',
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Plan: ${_license?.planType ?? "N/A"}'),
+                          if (_license != null)
+                            Text('Vence: ${_license!.expiryDate.toLocal().toString().substring(0, 10)}'),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Text('Plan: ${_license?.planType ?? "N/A"}'),
-                  const SizedBox(height: 4),
-                  if (_license != null)
-                    Text('Vence: ${_license!.expiryDate.toLocal().toString().substring(0, 10)}'),
+
                   const SizedBox(height: 24),
 
                   // Gráfico de barras (últimos 7 días)
@@ -98,7 +120,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               style: TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 16),
                           SizedBox(
-                            height: 200,
+                            height: 220,
                             child: BarChart(
                               BarChartData(
                                 alignment: BarChartAlignment.spaceAround,
@@ -112,7 +134,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             BarChartRodData(
                                               toY: spot.y,
                                               color: Colors.blue,
-                                              width: 20,
+                                              width: 22,
                                               borderRadius: BorderRadius.circular(4),
                                             ),
                                           ],
@@ -142,7 +164,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       },
                                     ),
                                   ),
+                                  topTitles: const AxisTitles(
+                                    sideTitles: SideTitles(showTitles: false),
+                                  ),
+                                  rightTitles: const AxisTitles(
+                                    sideTitles: SideTitles(showTitles: false),
+                                  ),
                                 ),
+                                borderData: FlBorderData(show: false),
+                                gridData: const FlGridData(show: false),
                               ),
                             ),
                           ),
@@ -152,29 +182,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
 
                   const SizedBox(height: 24),
+
+                  // Acciones rápidas
                   const Text('Acciones rápidas',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 16),
+
                   _buildButton(Icons.upload_file, 'Importar datos (.mipyme)', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const ImportScreen()));
                   }),
                   const SizedBox(height: 12),
+
                   _buildButton(Icons.bar_chart, 'Reportes financieros', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const ReportsScreen()));
                   }),
                   const SizedBox(height: 12),
+
                   _buildButton(Icons.account_balance, 'Impuestos (ONAT)', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const TaxScreen()));
                   }),
                   const SizedBox(height: 12),
+
                   _buildButton(Icons.receipt, 'Registros financieros', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const FinancialRecordsScreen()));
                   }),
-                  const Spacer(),
+                  const SizedBox(height: 12),
+
+                  _buildButton(Icons.sync, 'Sincronizar con móvil', () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const SyncScreen()));
+                  }),
+
+                  const SizedBox(height: 32),
                   Center(
                     child: Text(
                       'v1.0.0 - Complemento Windows',
