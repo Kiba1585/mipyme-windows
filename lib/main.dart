@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'screens/activation_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MipymeWindowsApp());
 }
 
