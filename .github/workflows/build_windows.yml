@@ -1,7 +1,7 @@
 name: Compilar MIPYME Windows
 
 on:
-  workflow_dispatch:  # solo se ejecuta cuando tú lo actives manualmente
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -16,7 +16,6 @@ jobs:
         with:
           flutter-version: '3.19.0'
 
-      # Habilitar soporte para escritorio Windows (por si no está activo)
       - name: Habilitar escritorio Windows
         run: flutter config --enable-windows-desktop
 
