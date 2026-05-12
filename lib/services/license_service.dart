@@ -2,9 +2,15 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:pointycastle/export.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../models/license_info.dart';
 
 class LicenseService {
-  // Reemplaza esto con tu clave pública real del LicGenerator
+  static const _storage = FlutterSecureStorage();
+  static const _keyActivated = 'windows_activated';
+  static const _keyLicenseInfo = 'license_info';
+
+  // CLAVE PÚBLICA DEL DISTRIBUIDOR (debe coincidir con LicGenerator)
   static const String _distributorPublicKeyPem =
       '-----BEGIN RSA PUBLIC KEY-----\n'
       'yzLm8/QmULq+Qa8RhW260tTOhsZwI7by8v+CmMaRP9fksX1St+0eRV/l8Q72s3bqKzTbcl7+irLhsPLaVJKGCeceFN0aZM77Y4dVIoSltBBhMOQS0G33YAsj/5817HZp4oKxprZN22wk8/XP8v2FACHGeQOHisfvBL83h5a3DwQKm2yta1r3mKJI9ujWT5w68fMokj7fYrdToNdIzX2wetk70FBDLf6XPPksY5fgBFE8dg9/JM0D8cqURd/W3cSU5e8EqAvtjKiQ1gJoUyTR0dr4ufDLMNcl/Tcpw3Ma8pHJ5uhGoG6Rv4NNbwJxyzyt6wlTtqaekb6/2cnMyrSWEw==\n'
@@ -41,8 +47,17 @@ class LicenseService {
         radix: 16);
   }
 
-  /// Valida un código de activación generado por la app móvil.
-  /// El código contiene la firma del dueño y los datos de la licencia.
+  static Future<bool> isActivated() async {
+    final val = await _storage.read(key: _keyActivated);
+    return val == 'true';
+  }
+
+  static Future<LicenseInfo?> getStoredInfo() async {
+    final json = await _storage.read(key: _keyLicenseInfo);
+    if (json == null) return null;
+    return LicenseInfo.fromJson(jsonDecode(json));
+  }
+
   static bool validateActivationCode(String code) {
     try {
       final parts = code.split('.');
@@ -62,5 +77,20 @@ class LicenseService {
     } catch (_) {
       return false;
     }
+  }
+
+  static Future<void> saveActivation(String code) async {
+    final parts = code.split('.');
+    final payloadBytes = base64Decode(parts[0]);
+    final payloadString = utf8.decode(payloadBytes);
+    final json = jsonDecode(payloadString) as Map<String, dynamic>;
+
+    await _storage.write(key: _keyActivated, value: 'true');
+    await _storage.write(key: _keyLicenseInfo, value: jsonEncode(json));
+  }
+
+  static Future<void> deactivate() async {
+    await _storage.delete(key: _keyActivated);
+    await _storage.delete(key: _keyLicenseInfo);
   }
 }
