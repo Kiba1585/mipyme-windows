@@ -1,9 +1,7 @@
 name: Compilar MIPYME Windows
 
 on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+  workflow_dispatch:  # solo se ejecuta cuando tú lo actives manualmente
 
 jobs:
   build-windows:
@@ -18,6 +16,10 @@ jobs:
         with:
           flutter-version: '3.19.0'
 
+      # Habilitar soporte para escritorio Windows (por si no está activo)
+      - name: Habilitar escritorio Windows
+        run: flutter config --enable-windows-desktop
+
       - name: Crear proyecto Flutter para Windows
         run: flutter create --project-name mipyme_windows --org com.mipyme .
 
@@ -29,7 +31,7 @@ jobs:
 
       - name: Empaquetar ejecutable en ZIP
         run: |
-          Compress-Archive -Path build/windows/runner/Release/* -DestinationPath mipyme-windows.zip
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath mipyme-windows.zip
 
       - name: Subir ZIP como artefacto
         uses: actions/upload-artifact@v4
