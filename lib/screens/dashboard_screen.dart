@@ -11,6 +11,8 @@ import 'financial_records_screen.dart';
 import 'sync_screen.dart';
 import 'predictions_screen.dart';
 import 'suppliers_screen.dart';
+import 'onat_declaration_screen.dart';
+import 'budget_screen.dart';
 import 'activation_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -208,6 +210,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   }),
                   const SizedBox(height: 12),
 
+                  _buildButton(Icons.assessment, 'Declaración ONAT', () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const OnatDeclarationScreen()));
+                  }),
+                  const SizedBox(height: 12),
+
                   _buildButton(Icons.receipt, 'Registros financieros', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const FinancialRecordsScreen()));
@@ -217,6 +225,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildButton(Icons.local_shipping, 'Proveedores', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const SuppliersScreen()));
+                  }),
+                  const SizedBox(height: 12),
+
+                  _buildButton(Icons.account_balance_wallet, 'Presupuestos', () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const BudgetScreen()));
                   }),
                   const SizedBox(height: 12),
 
