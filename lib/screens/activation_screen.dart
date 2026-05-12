@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/license_service.dart';
+import 'dashboard_screen.dart';
 
 class ActivationScreen extends StatefulWidget {
   const ActivationScreen({super.key});
@@ -13,20 +14,41 @@ class _ActivationScreenState extends State<ActivationScreen> {
   bool _loading = false;
   String? _error;
 
-  void _activate() {
+  @override
+  void initState() {
+    super.initState();
+    _checkIfAlreadyActivated();
+  }
+
+  Future<void> _checkIfAlreadyActivated() async {
+    final activated = await LicenseService.isActivated();
+    if (activated && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      );
+    }
+  }
+
+  Future<void> _activate() async {
     final code = _codeController.text.trim();
     if (code.isEmpty) {
       setState(() => _error = 'Ingrese el código de activación');
       return;
     }
 
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
     final valid = LicenseService.validateActivationCode(code);
     if (valid) {
-      // Navegar al dashboard (próximamente)
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Activación exitosa')),
+      await LicenseService.saveActivation(code);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
       );
     } else {
       setState(() => _error = 'Código inválido o expirado');
