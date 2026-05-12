@@ -1,11 +1,13 @@
 name: Compilar MIPYME Windows
 
 on:
-  workflow_dispatch:  # solo se ejecuta cuando tú lo actives manualmente
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build-windows:
-    runs-on: windows-latest  # máquina virtual con Windows 11
+    runs-on: windows-latest
 
     steps:
       - name: Preparar repositorio vacío
