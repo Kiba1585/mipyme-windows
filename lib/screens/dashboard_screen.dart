@@ -10,6 +10,7 @@ import 'tax_screen.dart';
 import 'financial_records_screen.dart';
 import 'sync_screen.dart';
 import 'predictions_screen.dart';
+import 'suppliers_screen.dart';
 import 'activation_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -210,6 +211,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildButton(Icons.receipt, 'Registros financieros', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const FinancialRecordsScreen()));
+                  }),
+                  const SizedBox(height: 12),
+
+                  _buildButton(Icons.local_shipping, 'Proveedores', () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const SuppliersScreen()));
                   }),
                   const SizedBox(height: 12),
 
