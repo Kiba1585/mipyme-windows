@@ -1,0 +1,33 @@
+name: mipyme_windows
+description: Complemento Windows para MIPYME Suite
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  path: ^1.9.0
+  path_provider: ^2.1.0
+  file_picker: ^6.1.1
+  pointycastle: ^3.7.0
+  crypto: ^3.0.3
+  convert: ^3.1.1
+  encrypt: ^5.0.3
+  sqflite_common_ffi: ^2.3.0
+  flutter_secure_storage: ^9.0.0
+  url_launcher: ^6.3.2
+  pdf: ^3.10.0
+  printing: 5.11.0
+  intl: ^0.18.1
+  fl_chart: ^0.69.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
