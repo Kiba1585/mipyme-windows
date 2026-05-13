@@ -1,3 +1,4 @@
+import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // Necesario para ConflictAlgorithm
 import 'database_service.dart';
 
 class ReminderService {
