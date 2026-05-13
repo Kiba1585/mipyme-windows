@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../models/asset.dart';
 import '../services/database_service.dart';
 
 class AssetsScreen extends StatefulWidget {
@@ -14,7 +15,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
   final _nameCtrl = TextEditingController();
   final _valueCtrl = TextEditingController();
   final _yearsCtrl = TextEditingController(text: '5');
-  List<Map<String, dynamic>> _assets = [];
+  List<Asset> _assets = [];
   bool _loading = true;
 
   @override
@@ -25,7 +26,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
   Future<void> _loadAssets() async {
     setState(() => _loading = true);
-    _assets = await DatabaseService.getFinancialRecords(type: 'asset');
+    _assets = await DatabaseService.getAssets();
     setState(() => _loading = false);
   }
 
@@ -34,15 +35,16 @@ class _AssetsScreenState extends State<AssetsScreen> {
 
     final value = double.tryParse(_valueCtrl.text) ?? 0;
     final years = int.tryParse(_yearsCtrl.text) ?? 5;
-    final monthlyDepreciation = value / (years * 12);
+    final acquisitionDate = DateTime.now();
 
-    await DatabaseService.addFinancialRecord(
-      date: DateFormat('yyyy-MM-dd').format(DateTime.now()),
-      type: 'asset',
-      amount: value,
-      category: 'Activo Fijo',
-      description: '${_nameCtrl.text.trim()} | Depreciación mensual: \$${monthlyDepreciation.toStringAsFixed(2)} ($years años)',
+    final asset = Asset(
+      name: _nameCtrl.text.trim(),
+      value: value,
+      usefulLifeYears: years,
+      acquisitionDate: acquisitionDate,
     );
+
+    await DatabaseService.addAsset(asset);
 
     _nameCtrl.clear();
     _valueCtrl.clear();
@@ -54,6 +56,11 @@ class _AssetsScreenState extends State<AssetsScreen> {
         const SnackBar(content: Text('Activo registrado correctamente')),
       );
     }
+  }
+
+  Future<void> _deleteAsset(int id) async {
+    await DatabaseService.deleteAsset(id);
+    _loadAssets();
   }
 
   @override
@@ -136,11 +143,37 @@ class _AssetsScreenState extends State<AssetsScreen> {
                         itemCount: _assets.length,
                         itemBuilder: (_, i) {
                           final asset = _assets[i];
+                          final monthsSinceAcquisition = DateTime.now()
+                                  .difference(asset.acquisitionDate)
+                                  .inDays ~/
+                              30;
+                          final accumulatedDepreciation =
+                              asset.monthlyDepreciation * monthsSinceAcquisition;
+                          final currentValue = asset.value - accumulatedDepreciation;
+
                           return Card(
                             child: ListTile(
-                              title: Text(asset['description'] ?? 'Activo ${i + 1}'),
-                              subtitle: Text(
-                                'Valor: \$${(asset['amount'] as num).toStringAsFixed(2)} | ${asset['date']}',
+                              title: Text(asset.name),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                      'Valor original: \$${asset.value.toStringAsFixed(2)}'),
+                                  Text(
+                                      'Depreciación mensual: \$${asset.monthlyDepreciation.toStringAsFixed(2)}'),
+                                  Text(
+                                      'Depreciación acumulada: \$${accumulatedDepreciation.toStringAsFixed(2)}'),
+                                  Text(
+                                    'Valor actual: \$${currentValue.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                      'Adquirido: ${DateFormat('dd/MM/yyyy').format(asset.acquisitionDate)}'),
+                                ],
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () => _deleteAsset(asset.id!),
                               ),
                             ),
                           );
