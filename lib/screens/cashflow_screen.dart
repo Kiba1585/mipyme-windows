@@ -19,6 +19,12 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
   double _totalExpenses = 0;
   bool _loading = true;
 
+  // Proyecciones
+  final _projIncomeCtrl = TextEditingController();
+  final _projExpenseCtrl = TextEditingController();
+  double? _projectedIncome;
+  double? _projectedExpenses;
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +51,20 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
       totalExpenses += expense;
     }
 
+    // Cargar proyección si existe
+    final proj = await DatabaseService.getCashflowProjection(monthStr);
+    if (proj != null) {
+      _projectedIncome = proj['projected_income'] as double;
+      _projectedExpenses = proj['projected_expenses'] as double;
+      _projIncomeCtrl.text = _projectedIncome!.toString();
+      _projExpenseCtrl.text = _projectedExpenses!.toString();
+    } else {
+      _projectedIncome = null;
+      _projectedExpenses = null;
+      _projIncomeCtrl.clear();
+      _projExpenseCtrl.clear();
+    }
+
     setState(() {
       _incomeSpots = incomeSpots;
       _expenseSpots = expenseSpots;
@@ -52,6 +72,19 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
       _totalExpenses = totalExpenses;
       _loading = false;
     });
+  }
+
+  Future<void> _saveProjection() async {
+    final income = double.tryParse(_projIncomeCtrl.text) ?? 0;
+    final expenses = double.tryParse(_projExpenseCtrl.text) ?? 0;
+    final month = _monthFormat.format(_selectedDate);
+    await DatabaseService.saveCashflowProjection(month, income, expenses);
+    _loadData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Proyección guardada')),
+      );
+    }
   }
 
   Future<void> _pickMonth() async {
@@ -100,6 +133,72 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
                           _totalIncome - _totalExpenses >= 0 ? Colors.blue : Colors.red),
                     ],
                   ),
+                  const SizedBox(height: 24),
+
+                  // Proyección
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Proyección del mes',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _projIncomeCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Ingresos esperados',
+                                    border: OutlineInputBorder(),
+                                    prefixText: '\$ ',
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: _projExpenseCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Gastos esperados',
+                                    border: OutlineInputBorder(),
+                                    prefixText: '\$ ',
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 40,
+                            child: ElevatedButton.icon(
+                              onPressed: _saveProjection,
+                              icon: const Icon(Icons.save, size: 18),
+                              label: const Text('Guardar proyección'),
+                            ),
+                          ),
+                          if (_projectedIncome != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                _buildComparison(
+                                    'Ingresos', _projectedIncome!, _totalIncome),
+                                const SizedBox(width: 12),
+                                _buildComparison(
+                                    'Gastos', _projectedExpenses!, _totalExpenses),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 24),
 
                   // Gráfico de líneas
@@ -198,6 +297,24 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildComparison(String label, double projected, double real) {
+    final diff = real - projected;
+    final color = diff >= 0 ? Colors.green : Colors.red;
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12)),
+          Text('Proy: \$${projected.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12)),
+          Text('Real: \$${real.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12)),
+          Text(
+            '${diff >= 0 ? '+' : ''}\$${diff.toStringAsFixed(2)}',
+            style: TextStyle(fontWeight: FontWeight.bold, color: color),
+          ),
+        ],
       ),
     );
   }
