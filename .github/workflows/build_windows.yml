@@ -11,6 +11,13 @@ jobs:
       - name: Clonar repositorio (tu código)
         uses: actions/checkout@v4
 
+      - name: Respaldar archivos personalizados
+        shell: bash
+        run: |
+          mkdir -p /tmp/mipyme_src
+          cp -r lib /tmp/mipyme_src/
+          cp pubspec.yaml /tmp/mipyme_src/
+
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -19,20 +26,16 @@ jobs:
       - name: Habilitar escritorio Windows
         run: flutter config --enable-windows-desktop
 
-      # Creamos el proyecto (esto sobrescribe lib/ y pubspec.yaml)
       - name: Crear proyecto Flutter
         run: flutter create --project-name mipyme_windows --org com.mipyme .
 
-      # Restauramos tus archivos originales
       - name: Restaurar código fuente personalizado
         shell: bash
         run: |
-          # Eliminar lo generado por defecto
           rm -rf lib
           rm -f pubspec.yaml
-          # Recuperamos lo que tenías en el repositorio
-          cp -r $GITHUB_WORKSPACE/lib lib
-          cp $GITHUB_WORKSPACE/pubspec.yaml pubspec.yaml
+          cp -r /tmp/mipyme_src/lib lib
+          cp /tmp/mipyme_src/pubspec.yaml pubspec.yaml
 
       - name: Instalar dependencias
         run: flutter pub get
