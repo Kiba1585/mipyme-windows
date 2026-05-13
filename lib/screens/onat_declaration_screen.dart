@@ -79,8 +79,10 @@ class _OnatDeclarationScreenState extends State<OnatDeclarationScreen> {
                           const Divider(),
                           Text('Ingreso Neto: \$${netIncome.toStringAsFixed(2)}'),
                           const SizedBox(height: 8),
-                          Text('Impuesto a Pagar (est.): \$${(netIncome > 0 ? netIncome * 0.05 : 0).toStringAsFixed(2)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold)),
+                          Text(
+                            'Impuesto a Pagar (est.): \$${(netIncome > 0 ? netIncome * 0.05 : 0).toStringAsFixed(2)}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ],
                       ),
                     ),
@@ -90,7 +92,7 @@ class _OnatDeclarationScreenState extends State<OnatDeclarationScreen> {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton.icon(
-                      onPressed: () => OnatAdvancedService.exportDj01(period),
+                      onPressed: () => OnatAdvancedService.generateDj01(period),
                       icon: const Icon(Icons.picture_as_pdf),
                       label: const Text('Exportar Declaración (PDF)'),
                     ),
