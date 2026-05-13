@@ -13,6 +13,7 @@ import 'predictions_screen.dart';
 import 'suppliers_screen.dart';
 import 'onat_declaration_screen.dart';
 import 'budget_screen.dart';
+import 'onat_advanced_screen.dart';
 import 'activation_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -207,6 +208,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildButton(Icons.account_balance, 'Impuestos (ONAT)', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const TaxScreen()));
+                  }),
+                  const SizedBox(height: 12),
+
+                  _buildButton(Icons.badge, 'Trámites ONAT', () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const OnatAdvancedScreen()));
                   }),
                   const SizedBox(height: 12),
 
