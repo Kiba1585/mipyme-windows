@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../models/employee.dart';
 import '../services/database_service.dart';
 
 class PayrollScreen extends StatefulWidget {
@@ -10,166 +11,80 @@ class PayrollScreen extends StatefulWidget {
 }
 
 class _PayrollScreenState extends State<PayrollScreen> {
-  final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _salaryCtrl = TextEditingController();
   final _bonusCtrl = TextEditingController(text: '0');
-  final _deductionsCtrl = TextEditingController(text: '0');
+  final _deductionCtrl = TextEditingController(text: '0');
+  final _searchCtrl = TextEditingController();
+  List<Employee> _employees = [];
   List<Map<String, dynamic>> _payrollHistory = [];
+  Employee? _selectedEmployee;
   bool _loading = true;
 
   @override
-  void initState() {
-    super.initState();
-    _loadHistory();
-  }
+  void initState() { super.initState(); _load(); }
 
-  Future<void> _loadHistory() async {
+  Future<void> _load() async {
     setState(() => _loading = true);
-    _payrollHistory = await DatabaseService.getFinancialRecords(
-      type: 'payroll',
-    );
+    _employees = await DatabaseService.getEmployees(search: _searchCtrl.text);
+    _payrollHistory = await DatabaseService.getFinancialRecords(type: 'payroll');
     setState(() => _loading = false);
   }
 
-  Future<void> _addPayroll() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _addEmployee() async {
+    if (_nameCtrl.text.isEmpty || _salaryCtrl.text.isEmpty) return;
+    await DatabaseService.addEmployee(Employee(name: _nameCtrl.text.trim(), baseSalary: double.parse(_salaryCtrl.text)));
+    _nameCtrl.clear(); _salaryCtrl.clear();
+    _load();
+  }
 
-    final salary = double.tryParse(_salaryCtrl.text) ?? 0;
+  Future<void> _payEmployee(Employee emp) async {
     final bonus = double.tryParse(_bonusCtrl.text) ?? 0;
-    final deductions = double.tryParse(_deductionsCtrl.text) ?? 0;
-    final total = salary + bonus - deductions;
-
-    if (total <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El total a pagar debe ser mayor que 0')),
-      );
-      return;
-    }
-
+    final deduction = double.tryParse(_deductionCtrl.text) ?? 0;
+    final total = emp.baseSalary + bonus - deduction;
     await DatabaseService.addFinancialRecord(
       date: DateFormat('yyyy-MM-dd').format(DateTime.now()),
-      type: 'payroll',
-      amount: total,
-      category: 'Nómina',
-      description: '${_nameCtrl.text.trim()}: Salario \$$salary + Bono \$$bonus - Deduc. \$$deductions',
+      type: 'payroll', amount: total, category: 'Nómina',
+      description: '${emp.name}: Base \$${emp.baseSalary} + Bono \$${bonus} - Deduc. \$${deduction}',
     );
-
-    _nameCtrl.clear();
-    _salaryCtrl.clear();
-    _bonusCtrl.text = '0';
-    _deductionsCtrl.text = '0';
-
-    _loadHistory();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pago registrado correctamente')),
-      );
-    }
+    _bonusCtrl.text = '0'; _deductionCtrl.text = '0';
+    _load();
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pago registrado')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Nóminas')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+      body: _loading ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Registrar pago a trabajador',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: _nameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre del trabajador',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _salaryCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Salario base',
-                      border: OutlineInputBorder(),
-                      prefixText: '\$ ',
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _bonusCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Bonos',
-                            border: OutlineInputBorder(),
-                            prefixText: '\$ ',
-                          ),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _deductionsCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Deducciones',
-                            border: OutlineInputBorder(),
-                            prefixText: '\$ ',
-                          ),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: _addPayroll,
-                      icon: const Icon(Icons.payment),
-                      label: const Text('REGISTRAR PAGO'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-            const Text('Historial de pagos',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            // Registrar empleado
+            TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Nombre empleado', border: OutlineInputBorder())),
+            const SizedBox(height: 8),
+            TextField(controller: _salaryCtrl, decoration: const InputDecoration(labelText: 'Salario base', border: OutlineInputBorder(), prefixText: '\$ '), keyboardType: TextInputType.number),
             const SizedBox(height: 12),
-            _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _payrollHistory.isEmpty
-                    ? const Text('No hay pagos registrados')
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _payrollHistory.length,
-                        itemBuilder: (_, i) {
-                          final record = _payrollHistory[i];
-                          return Card(
-                            child: ListTile(
-                              title: Text(
-                                (record['amount'] as num).toStringAsFixed(2),
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              subtitle: Text(record['description'] ?? ''),
-                              trailing: Text(record['date'] as String),
-                            ),
-                          );
-                        },
-                      ),
+            ElevatedButton.icon(onPressed: _addEmployee, icon: const Icon(Icons.person_add), label: const Text('Agregar empleado')),
+            const SizedBox(height: 24),
+            // Buscar y pagar
+            TextField(controller: _searchCtrl, decoration: const InputDecoration(labelText: 'Buscar empleado', prefixIcon: Icon(Icons.search), border: OutlineInputBorder()), onChanged: (_) => _load()),
+            const SizedBox(height: 12),
+            ..._employees.map((emp) => Card(
+              child: ListTile(
+                title: Text(emp.name),
+                subtitle: Text('Base: \$${emp.baseSalary.toStringAsFixed(2)}'),
+                trailing: ElevatedButton(onPressed: () => _payEmployee(emp), child: const Text('Pagar')),
+              ),
+            )),
+            if (_employees.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              TextField(controller: _bonusCtrl, decoration: const InputDecoration(labelText: 'Bono extra', border: OutlineInputBorder(), prefixText: '\$ '), keyboardType: TextInputType.number),
+              TextField(controller: _deductionCtrl, decoration: const InputDecoration(labelText: 'Deducciones', border: OutlineInputBorder(), prefixText: '\$ '), keyboardType: TextInputType.number),
+            ],
+            const SizedBox(height: 24),
+            const Text('Historial de pagos', style: TextStyle(fontWeight: FontWeight.bold)),
+            ..._payrollHistory.map((r) => ListTile(title: Text('\$${(r['amount'] as num).toStringAsFixed(2)}'), subtitle: Text('${r['description']}  |  ${r['date']}'))),
           ],
         ),
       ),
