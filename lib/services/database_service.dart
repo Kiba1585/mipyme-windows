@@ -4,6 +4,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../models/supplier.dart';
 import '../models/budget.dart';
+import '../models/asset.dart';
+import '../models/employee.dart';
 
 class DatabaseService {
   static Database? _database;
@@ -17,7 +19,7 @@ class DatabaseService {
     _database = await databaseFactoryFfi.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 3, // Incrementada por nuevas tablas
+        version: 5,
         onCreate: (db, version) async {
           await _createTables(db);
         },
@@ -41,6 +43,35 @@ class DatabaseService {
                 projected_income REAL NOT NULL,
                 projected_expenses REAL NOT NULL,
                 notes TEXT
+              )
+            ''');
+          }
+          if (oldVersion < 4) {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                base_salary REAL NOT NULL,
+                notes TEXT
+              )
+            ''');
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                value REAL NOT NULL,
+                useful_life_years INTEGER NOT NULL,
+                acquisition_date TEXT NOT NULL
+              )
+            ''');
+          }
+          if (oldVersion < 5) {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS cashflow_projections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                month TEXT NOT NULL UNIQUE,
+                projected_income REAL NOT NULL,
+                projected_expenses REAL NOT NULL
               )
             ''');
           }
@@ -98,6 +129,31 @@ class DatabaseService {
         notes TEXT
       )
     ''');
+    await db.execute('''
+      CREATE TABLE employees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        base_salary REAL NOT NULL,
+        notes TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE assets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        value REAL NOT NULL,
+        useful_life_years INTEGER NOT NULL,
+        acquisition_date TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE cashflow_projections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        month TEXT NOT NULL UNIQUE,
+        projected_income REAL NOT NULL,
+        projected_expenses REAL NOT NULL
+      )
+    ''');
   }
 
   // ==================== IMPORTED DATA ====================
@@ -141,10 +197,20 @@ class DatabaseService {
     final db = await database;
     String where = '1=1';
     List<dynamic> args = [];
-    if (startDate != null) { where += ' AND date >= ?'; args.add(startDate); }
-    if (endDate != null) { where += ' AND date <= ?'; args.add(endDate); }
-    if (type != null) { where += ' AND type = ?'; args.add(type); }
-    return await db.query('financial_records', where: where, whereArgs: args, orderBy: 'date DESC');
+    if (startDate != null) {
+      where += ' AND date >= ?';
+      args.add(startDate);
+    }
+    if (endDate != null) {
+      where += ' AND date <= ?';
+      args.add(endDate);
+    }
+    if (type != null) {
+      where += ' AND type = ?';
+      args.add(type);
+    }
+    return await db.query('financial_records',
+        where: where, whereArgs: args, orderBy: 'date DESC');
   }
 
   static Future<double> getTotalByType(String type, String startDate, String endDate) async {
@@ -226,5 +292,59 @@ class DatabaseService {
     final maps = await db.query('budgets', where: 'month = ?', whereArgs: [month]);
     if (maps.isEmpty) return null;
     return Budget.fromMap(maps.first);
+  }
+
+  // ==================== EMPLOYEES ====================
+  static Future<int> addEmployee(Employee emp) async {
+    final db = await database;
+    return await db.insert('employees', emp.toMap());
+  }
+
+  static Future<List<Employee>> getEmployees({String? search}) async {
+    final db = await database;
+    List<Map<String, dynamic>> maps;
+    if (search != null && search.isNotEmpty) {
+      maps = await db.query('employees',
+          where: 'name LIKE ?', whereArgs: ['%$search%'], orderBy: 'name');
+    } else {
+      maps = await db.query('employees', orderBy: 'name');
+    }
+    return maps.map((m) => Employee.fromMap(m)).toList();
+  }
+
+  // ==================== ASSETS ====================
+  static Future<int> addAsset(Asset asset) async {
+    final db = await database;
+    return await db.insert('assets', asset.toMap());
+  }
+
+  static Future<List<Asset>> getAssets() async {
+    final db = await database;
+    final maps = await db.query('assets', orderBy: 'name');
+    return maps.map((m) => Asset.fromMap(m)).toList();
+  }
+
+  static Future<void> deleteAsset(int id) async {
+    final db = await database;
+    await db.delete('assets', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ==================== CASHFLOW PROJECTIONS ====================
+  static Future<void> saveCashflowProjection(
+      String month, double income, double expenses) async {
+    final db = await database;
+    await db.insert(
+      'cashflow_projections',
+      {'month': month, 'projected_income': income, 'projected_expenses': expenses},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<Map<String, dynamic>?> getCashflowProjection(String month) async {
+    final db = await database;
+    final maps = await db.query('cashflow_projections',
+        where: 'month = ?', whereArgs: [month]);
+    if (maps.isEmpty) return null;
+    return maps.first;
   }
 }
