@@ -8,8 +8,8 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Preparar repositorio vacío
-        run: echo "Repositorio para MIPYME Windows"
+      - name: Clonar repositorio (tu código)
+        uses: actions/checkout@v4
 
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2
@@ -19,8 +19,20 @@ jobs:
       - name: Habilitar escritorio Windows
         run: flutter config --enable-windows-desktop
 
-      - name: Crear proyecto Flutter para Windows
+      # Creamos el proyecto (esto sobrescribe lib/ y pubspec.yaml)
+      - name: Crear proyecto Flutter
         run: flutter create --project-name mipyme_windows --org com.mipyme .
+
+      # Restauramos tus archivos originales
+      - name: Restaurar código fuente personalizado
+        shell: bash
+        run: |
+          # Eliminar lo generado por defecto
+          rm -rf lib
+          rm -f pubspec.yaml
+          # Recuperamos lo que tenías en el repositorio
+          cp -r $GITHUB_WORKSPACE/lib lib
+          cp $GITHUB_WORKSPACE/pubspec.yaml pubspec.yaml
 
       - name: Instalar dependencias
         run: flutter pub get
