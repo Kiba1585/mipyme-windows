@@ -42,19 +42,24 @@ class _ActivationScreenState extends State<ActivationScreen> {
       _error = null;
     });
 
-    final valid = LicenseService.validateActivationCode(code);
-    if (valid) {
-      await LicenseService.saveActivation(code);
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-      );
-    } else {
-      setState(() => _error = 'Código inválido o expirado');
+    try {
+      // Validar el código
+      final info = LicenseService.validateActivationCode(code);
+      if (info != null) {
+        await LicenseService.saveActivation(code);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      } else {
+        setState(() => _error = 'Código inválido o expirado');
+      }
+    } catch (e) {
+      setState(() => _error = 'Error: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-
-    setState(() => _loading = false);
   }
 
   @override
@@ -95,7 +100,11 @@ class _ActivationScreenState extends State<ActivationScreen> {
               child: ElevatedButton(
                 onPressed: _loading ? null : _activate,
                 child: _loading
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(color: Colors.white),
+                      )
                     : const Text('ACTIVAR'),
               ),
             ),
