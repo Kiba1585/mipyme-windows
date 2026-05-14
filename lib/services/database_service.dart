@@ -29,7 +29,7 @@ class DatabaseService {
     return await databaseFactoryFfi.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 7, // <-- Se incrementa a 7 para añadir la tabla products
+        version: 7,
         onCreate: (db, version) async {
           await _createTables(db);
         },
@@ -115,7 +115,6 @@ class DatabaseService {
   }
 
   static Future<void> _createTables(Database db) async {
-    // Todas las tablas anteriores, incluyendo products
     await db.execute('''
       CREATE TABLE imported_data (
         id INTEGER PRIMARY KEY,
@@ -205,7 +204,6 @@ class DatabaseService {
       )
     ''');
 
-    // NUEVA TABLA products
     await db.execute('''
       CREATE TABLE products (
         id INTEGER PRIMARY KEY,
@@ -220,7 +218,192 @@ class DatabaseService {
     ''');
   }
 
-  // ... (métodos existentes de imported_data, financial_records, etc.)
+  // ==================== IMPORTED DATA ====================
+  static Future<void> saveImportedData(String fileName, Map<String, dynamic> data) async {
+    final db = await database;
+    await db.insert('imported_data', {
+      'file_name': fileName,
+      'import_date': DateTime.now().toIso8601String(),
+      'data': data.toString(),
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getImportedFiles() async {
+    final db = await database;
+    return await db.query('imported_data', orderBy: 'import_date DESC');
+  }
+
+  // ==================== FINANCIAL RECORDS ====================
+  static Future<int> addFinancialRecord({
+    required String date,
+    required String type,
+    required double amount,
+    required String category,
+    String? description,
+  }) async {
+    final db = await database;
+    return await db.insert('financial_records', {
+      'date': date,
+      'type': type,
+      'amount': amount,
+      'category': category,
+      'description': description,
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getFinancialRecords({
+    String? startDate,
+    String? endDate,
+    String? type,
+  }) async {
+    final db = await database;
+    String where = '1=1';
+    List<dynamic> args = [];
+    if (startDate != null) {
+      where += ' AND date >= ?';
+      args.add(startDate);
+    }
+    if (endDate != null) {
+      where += ' AND date <= ?';
+      args.add(endDate);
+    }
+    if (type != null) {
+      where += ' AND type = ?';
+      args.add(type);
+    }
+    return await db.query('financial_records', where: where, whereArgs: args, orderBy: 'date DESC');
+  }
+
+  static Future<double> getTotalByType(String type, String startDate, String endDate) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT SUM(amount) as total FROM financial_records WHERE type = ? AND date BETWEEN ? AND ?',
+      [type, startDate, endDate],
+    );
+    return (result.first['total'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  // ==================== TAX CALCULATIONS ====================
+  static Future<int> saveTaxCalculation({
+    required String period,
+    required double grossIncome,
+    required double expenses,
+    required double taxableIncome,
+    required double taxAmount,
+  }) async {
+    final db = await database;
+    return await db.insert('tax_calculations', {
+      'period': period,
+      'gross_income': grossIncome,
+      'expenses': expenses,
+      'taxable_income': taxableIncome,
+      'tax_amount': taxAmount,
+      'calculated_date': DateTime.now().toIso8601String(),
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getTaxHistory() async {
+    final db = await database;
+    return await db.query('tax_calculations', orderBy: 'period DESC');
+  }
+
+  // ==================== SUPPLIERS ====================
+  static Future<int> addSupplier(Supplier supplier) async {
+    final db = await database;
+    return await db.insert('suppliers', supplier.toMap());
+  }
+
+  static Future<List<Supplier>> getSuppliers({String? search}) async {
+    final db = await database;
+    List<Map<String, dynamic>> maps;
+    if (search != null && search.isNotEmpty) {
+      maps = await db.query('suppliers',
+          where: 'name LIKE ? OR phone LIKE ?',
+          whereArgs: ['%$search%', '%$search%'],
+          orderBy: 'name');
+    } else {
+      maps = await db.query('suppliers', orderBy: 'name');
+    }
+    return maps.map((m) => Supplier.fromMap(m)).toList();
+  }
+
+  static Future<void> updateSupplier(Supplier supplier) async {
+    final db = await database;
+    await db.update('suppliers', supplier.toMap(), where: 'id = ?', whereArgs: [supplier.id]);
+  }
+
+  static Future<void> deleteSupplier(int id) async {
+    final db = await database;
+    await db.delete('suppliers', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ==================== BUDGETS ====================
+  static Future<int> saveBudget(Budget budget) async {
+    final db = await database;
+    return await db.insert(
+      'budgets',
+      budget.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<Budget?> getBudget(String month) async {
+    final db = await database;
+    final maps = await db.query('budgets', where: 'month = ?', whereArgs: [month]);
+    if (maps.isEmpty) return null;
+    return Budget.fromMap(maps.first);
+  }
+
+  // ==================== EMPLOYEES ====================
+  static Future<int> addEmployee(Employee emp) async {
+    final db = await database;
+    return await db.insert('employees', emp.toMap());
+  }
+
+  static Future<List<Employee>> getEmployees({String? search}) async {
+    final db = await database;
+    List<Map<String, dynamic>> maps;
+    if (search != null && search.isNotEmpty) {
+      maps = await db.query('employees', where: 'name LIKE ?', whereArgs: ['%$search%'], orderBy: 'name');
+    } else {
+      maps = await db.query('employees', orderBy: 'name');
+    }
+    return maps.map((m) => Employee.fromMap(m)).toList();
+  }
+
+  // ==================== ASSETS ====================
+  static Future<int> addAsset(Asset asset) async {
+    final db = await database;
+    return await db.insert('assets', asset.toMap());
+  }
+
+  static Future<List<Asset>> getAssets() async {
+    final db = await database;
+    final maps = await db.query('assets', orderBy: 'name');
+    return maps.map((m) => Asset.fromMap(m)).toList();
+  }
+
+  static Future<void> deleteAsset(int id) async {
+    final db = await database;
+    await db.delete('assets', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ==================== CASHFLOW PROJECTIONS ====================
+  static Future<void> saveCashflowProjection(String month, double income, double expenses) async {
+    final db = await database;
+    await db.insert(
+      'cashflow_projections',
+      {'month': month, 'projected_income': income, 'projected_expenses': expenses},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<Map<String, dynamic>?> getCashflowProjection(String month) async {
+    final db = await database;
+    final maps = await db.query('cashflow_projections', where: 'month = ?', whereArgs: [month]);
+    if (maps.isEmpty) return null;
+    return maps.first;
+  }
 
   // ==================== PRODUCTS ====================
   static Future<void> insertProducts(List<Map<String, dynamic>> products) async {
@@ -236,9 +419,4 @@ class DatabaseService {
     final db = await database;
     return await db.query('products', orderBy: 'name');
   }
-
-  // ==================== RESTO DE MÉTODOS (IMPORTED_DATA, FINANCIAL_RECORDS, etc.) ====================
-  // Se mantienen todos los métodos que ya tenías (saveImportedData, getImportedFiles,
-  // addFinancialRecord, getFinancialRecords, getTotalByType, etc.)
-  // Asegúrate de copiar TODOS los demás métodos desde la versión anterior.
 }
