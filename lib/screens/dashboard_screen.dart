@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../services/license_service.dart';
 import '../services/database_service.dart';
 import '../models/license_info.dart';
+import 'activation_screen.dart';
 import 'import_screen.dart';
 import 'reports_screen.dart';
 import 'tax_screen.dart';
@@ -14,7 +15,9 @@ import 'suppliers_screen.dart';
 import 'onat_declaration_screen.dart';
 import 'budget_screen.dart';
 import 'onat_advanced_screen.dart';
-import 'activation_screen.dart';
+import 'cashflow_screen.dart';
+import 'payroll_screen.dart';
+import 'assets_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -35,11 +38,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
-       LicenseInfo? license;
+    setState(() => _loading = true);
+
+    // Cargar datos de la licencia
     try {
-      license = await LicenseService.getStoredInfo();
+      _license = await LicenseService.getStoredInfo();
     } catch (_) {
-      // Si no hay licencia, redirigir a activación
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -48,26 +52,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
     }
-  
+
     // Cargar datos para el gráfico (últimos 7 días)
-    final today = DateTime.now();
-    final spots = <FlSpot>[];
-    for (int i = 6; i >= 0; i--) {
-      final date = today.subtract(Duration(days: i));
-      final dateStr = DateFormat('yyyy-MM-dd').format(date);
-      final total = await DatabaseService.getTotalByType('income', dateStr, dateStr);
-      spots.add(FlSpot((6 - i).toDouble(), total));
+    try {
+      final today = DateTime.now();
+      final spots = <FlSpot>[];
+      for (int i = 6; i >= 0; i--) {
+        final date = today.subtract(Duration(days: i));
+        final dateStr = DateFormat('yyyy-MM-dd').format(date);
+        final total = await DatabaseService.getTotalByType('income', dateStr, dateStr);
+        spots.add(FlSpot((6 - i).toDouble(), total));
+      }
+      _chartData = {'spots': spots};
+    } catch (_) {
+      _chartData = {'spots': <FlSpot>[]};
     }
 
-    setState(() {
-      _license = license;
-      _chartData = {'spots': spots};
-      _loading = false;
-    });
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _refreshData() async {
-    setState(() => _loading = true);
     await _loadData();
   }
 
@@ -127,76 +131,77 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 24),
 
                   // Gráfico de barras (últimos 7 días)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Ingresos (últimos 7 días)',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 220,
-                            child: BarChart(
-                              BarChartData(
-                                alignment: BarChartAlignment.spaceAround,
-                                maxY: (_chartData?['spots'] as List<FlSpot>)
-                                        .fold(0.0, (max, s) => s.y > max ? s.y : max) *
-                                    1.2,
-                                barGroups: (_chartData?['spots'] as List<FlSpot>)
-                                    .map((spot) => BarChartGroupData(
-                                          x: spot.x.toInt(),
-                                          barRods: [
-                                            BarChartRodData(
-                                              toY: spot.y,
-                                              color: Colors.blue,
-                                              width: 22,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                          ],
-                                        ))
-                                    .toList(),
-                                titlesData: FlTitlesData(
-                                  leftTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      reservedSize: 42,
-                                      getTitlesWidget: (value, meta) => Text(
-                                        '\$${value.toInt()}',
-                                        style: const TextStyle(fontSize: 10),
+                  if (_chartData != null && (_chartData!['spots'] as List).isNotEmpty)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Ingresos (últimos 7 días)',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              height: 220,
+                              child: BarChart(
+                                BarChartData(
+                                  alignment: BarChartAlignment.spaceAround,
+                                  maxY: (_chartData!['spots'] as List<FlSpot>)
+                                          .fold(0.0, (max, s) => s.y > max ? s.y : max) *
+                                      1.2,
+                                  barGroups: (_chartData!['spots'] as List<FlSpot>)
+                                      .map((spot) => BarChartGroupData(
+                                            x: spot.x.toInt(),
+                                            barRods: [
+                                              BarChartRodData(
+                                                toY: spot.y,
+                                                color: Colors.blue,
+                                                width: 22,
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                            ],
+                                          ))
+                                      .toList(),
+                                  titlesData: FlTitlesData(
+                                    leftTitles: AxisTitles(
+                                      sideTitles: SideTitles(
+                                        showTitles: true,
+                                        reservedSize: 42,
+                                        getTitlesWidget: (value, meta) => Text(
+                                          '\$${value.toInt()}',
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  bottomTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      getTitlesWidget: (value, meta) {
-                                        final date = DateTime.now()
-                                            .subtract(Duration(days: 6 - value.toInt()));
-                                        return Text(
-                                          DateFormat('dd/MM').format(date),
-                                          style: const TextStyle(fontSize: 10),
-                                        );
-                                      },
+                                    bottomTitles: AxisTitles(
+                                      sideTitles: SideTitles(
+                                        showTitles: true,
+                                        getTitlesWidget: (value, meta) {
+                                          final date = DateTime.now()
+                                              .subtract(Duration(days: 6 - value.toInt()));
+                                          return Text(
+                                            DateFormat('dd/MM').format(date),
+                                            style: const TextStyle(fontSize: 10),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    topTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                    rightTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
                                     ),
                                   ),
-                                  topTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                  rightTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
+                                  borderData: FlBorderData(show: false),
+                                  gridData: const FlGridData(show: false),
                                 ),
-                                borderData: FlBorderData(show: false),
-                                gridData: const FlGridData(show: false),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
                   const SizedBox(height: 24),
 
@@ -214,6 +219,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildButton(Icons.bar_chart, 'Reportes financieros', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const ReportsScreen()));
+                  }),
+                  const SizedBox(height: 12),
+
+                  _buildButton(Icons.attach_money, 'Flujo de Caja', () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const CashFlowScreen()));
                   }),
                   const SizedBox(height: 12),
 
@@ -238,6 +249,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildButton(Icons.receipt, 'Registros financieros', () {
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const FinancialRecordsScreen()));
+                  }),
+                  const SizedBox(height: 12),
+
+                  _buildButton(Icons.people, 'Nóminas', () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const PayrollScreen()));
+                  }),
+                  const SizedBox(height: 12),
+
+                  _buildButton(Icons.business, 'Activos Fijos', () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const AssetsScreen()));
                   }),
                   const SizedBox(height: 12),
 
