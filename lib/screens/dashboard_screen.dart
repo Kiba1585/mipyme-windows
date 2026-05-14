@@ -250,7 +250,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    _buildKpiCard('Próx. vencimientos', '$_upcomingTaxDeadlines', Icons.notifications_active, Colors.red),
+                    _buildKpiCard(
+                      _upcomingTaxDeadlines > 0 ? '¡Vencimientos!' : 'Próx. vencimientos',
+                      _upcomingTaxDeadlines > 0 ? '$_upcomingTaxDeadlines' : '0',
+                      _upcomingTaxDeadlines > 0 ? Icons.notification_important : Icons.notifications_none,
+                      _upcomingTaxDeadlines > 0 ? Colors.red : Colors.grey,
+                    ),
                     const SizedBox(width: 12),
                     const Expanded(child: SizedBox.shrink()),
                   ],
