@@ -18,6 +18,8 @@ import 'onat_advanced_screen.dart';
 import 'cashflow_screen.dart';
 import 'payroll_screen.dart';
 import 'assets_screen.dart';
+import 'bulk_inventory_screen.dart';
+import 'settings_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -39,15 +41,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() { _loading = true; _errorMessage = null; });
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
 
     try {
-      // Timeout global para toda la carga: 15 segundos
       await _doLoad().timeout(const Duration(seconds: 15));
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Error al cargar los datos: ${e.toString()}';
-      });
+      setState(() => _errorMessage = 'Error al cargar los datos: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -101,29 +103,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: Text(_license?.ownerName ?? 'MIPYME Windows'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData),
-          IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData, tooltip: 'Actualizar datos'),
+          IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Desactivar'),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
               ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error, size: 64, color: Colors.red),
-                        const SizedBox(height: 16),
-                        Text(_errorMessage!, textAlign: TextAlign.center),
-                        const SizedBox(height: 24),
-                        ElevatedButton(
-                          onPressed: _refreshData,
-                          child: const Text('Reintentar'),
-                        ),
-                      ],
-                    ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error, size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text(_errorMessage!, textAlign: TextAlign.center),
+                      const SizedBox(height: 24),
+                      ElevatedButton(onPressed: _refreshData, child: const Text('Reintentar')),
+                    ],
                   ),
                 )
               : SingleChildScrollView(
@@ -150,7 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // Gráfico
+                      // Gráfico de ingresos (últimos 7 días)
                       if (_chartData != null && (_chartData!['spots'] as List).isNotEmpty)
                         Card(
                           child: Padding(
@@ -158,7 +154,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Ingresos (últimos 7 días)', style: TextStyle(fontWeight: FontWeight.bold)),
+                                const Text('Ingresos (últimos 7 días)',
+                                    style: TextStyle(fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 16),
                                 SizedBox(
                                   height: 220,
@@ -186,22 +183,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           sideTitles: SideTitles(
                                             showTitles: true,
                                             reservedSize: 42,
-                                            getTitlesWidget: (value, meta) => Text(
-                                              '\$${value.toInt()}',
-                                              style: const TextStyle(fontSize: 10),
-                                            ),
+                                            getTitlesWidget: (value, meta) =>
+                                                Text('\$${value.toInt()}', style: const TextStyle(fontSize: 10)),
                                           ),
                                         ),
                                         bottomTitles: AxisTitles(
                                           sideTitles: SideTitles(
                                             showTitles: true,
                                             getTitlesWidget: (value, meta) {
-                                              final date = DateTime.now()
-                                                  .subtract(Duration(days: 6 - value.toInt()));
-                                              return Text(
-                                                DateFormat('dd/MM').format(date),
-                                                style: const TextStyle(fontSize: 10),
-                                              );
+                                              final date =
+                                                  DateTime.now().subtract(Duration(days: 6 - value.toInt()));
+                                              return Text(DateFormat('dd/MM').format(date),
+                                                  style: const TextStyle(fontSize: 10));
                                             },
                                           ),
                                         ),
@@ -221,46 +214,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 24),
 
                       // Acciones rápidas
-                      const Text('Acciones rápidas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                      const Text('Acciones rápidas',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 16),
+
                       _buildButton(Icons.upload_file, 'Importar datos (.mipyme)', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportScreen()))),
                       const SizedBox(height: 12),
+
+                      _buildButton(Icons.inventory, 'Carga masiva de inventario', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const BulkInventoryScreen()))),
+                      const SizedBox(height: 12),
+
                       _buildButton(Icons.bar_chart, 'Reportes financieros', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.attach_money, 'Flujo de Caja', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const CashFlowScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.account_balance, 'Impuestos (ONAT)', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const TaxScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.badge, 'Trámites ONAT', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const OnatAdvancedScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.assessment, 'Declaración ONAT', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const OnatDeclarationScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.receipt, 'Registros financieros', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancialRecordsScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.people, 'Nóminas', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const PayrollScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.business, 'Activos Fijos', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const AssetsScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.local_shipping, 'Proveedores', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const SuppliersScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.account_balance_wallet, 'Presupuestos', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.insights, 'Predicciones', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const PredictionsScreen()))),
                       const SizedBox(height: 12),
+
                       _buildButton(Icons.sync, 'Sincronizar con móvil', () =>
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const SyncScreen()))),
+                      const SizedBox(height: 12),
+
+                      _buildButton(Icons.settings, 'Configuración', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
 
                       const SizedBox(height: 32),
                       Center(
