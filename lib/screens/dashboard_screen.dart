@@ -33,6 +33,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _chartData;
   bool _loading = true;
   String? _errorMessage;
+  int _selectedIndex = 0; // Para el NavigationRail
+
+  // KPIs
+  double _totalIncome = 0;
+  double _totalExpenses = 0;
+  int _upcomingTaxDeadlines = 0;
+  int _totalEmployees = 0;
 
   @override
   void initState() {
@@ -56,7 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _doLoad() async {
-    // 1. Licencia
+    // Licencia
     try {
       _license = await LicenseService.getStoredInfo();
     } catch (_) {
@@ -69,7 +76,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    // 2. Datos del gráfico
+    // Datos del gráfico (últimos 7 días)
     try {
       final today = DateTime.now();
       final spots = <FlSpot>[];
@@ -82,6 +89,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _chartData = {'spots': spots};
     } catch (_) {
       _chartData = {'spots': <FlSpot>[]};
+    }
+
+    // KPIs
+    try {
+      final now = DateTime.now();
+      final monthStart = DateFormat('yyyy-MM-01').format(now);
+      final monthEnd = DateFormat('yyyy-MM-31').format(now);
+      _totalIncome = await DatabaseService.getTotalByType('income', monthStart, monthEnd);
+      _totalExpenses = await DatabaseService.getTotalByType('expense', monthStart, monthEnd);
+
+      // Empleados
+      final employees = await DatabaseService.getEmployees();
+      _totalEmployees = employees.length;
+
+      // Próximos vencimientos (simplificado: 1 si hay recordatorio para el mes siguiente)
+      final upcoming = await DatabaseService.getCashflowProjection(
+        DateFormat('yyyy-MM').format(DateTime.now().add(const Duration(days: 30))),
+      );
+      _upcomingTaxDeadlines = upcoming != null ? 1 : 0;
+    } catch (_) {
+      // Valores por defecto si falla
     }
   }
 
@@ -97,205 +125,242 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // Pantallas de destino según índice del menú
+  Widget _pageForIndex(int index) {
+    switch (index) {
+      case 0:
+        return _buildDashboardContent();
+      case 1:
+        return const BulkInventoryScreen();
+      case 2:
+        return const ImportScreen();
+      case 3:
+        return const ReportsScreen();
+      case 4:
+        return const TaxScreen();
+      case 5:
+        return const OnatAdvancedScreen();
+      case 6:
+        return const FinancialRecordsScreen();
+      case 7:
+        return const PayrollScreen();
+      case 8:
+        return const AssetsScreen();
+      case 9:
+        return const SuppliersScreen();
+      case 10:
+        return const BudgetScreen();
+      case 11:
+        return const PredictionsScreen();
+      case 12:
+        return const SyncScreen();
+      case 13:
+        return const SettingsScreen();
+      default:
+        return _buildDashboardContent();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(_license?.ownerName ?? 'MIPYME Windows'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData, tooltip: 'Actualizar datos'),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData, tooltip: 'Actualizar'),
           IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Desactivar'),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error, size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text(_errorMessage!, textAlign: TextAlign.center),
-                      const SizedBox(height: 24),
-                      ElevatedButton(onPressed: _refreshData, child: const Text('Reintentar')),
-                    ],
-                  ),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Tarjeta de licencia
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Bienvenido, ${_license?.ownerName ?? "Usuario"}',
-                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              Text('Plan: ${_license?.planType ?? "N/A"}'),
-                              if (_license != null)
-                                Text('Vence: ${_license!.expiryDate.toLocal().toString().substring(0, 10)}'),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Gráfico de ingresos (últimos 7 días)
-                      if (_chartData != null && (_chartData!['spots'] as List).isNotEmpty)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Ingresos (últimos 7 días)',
-                                    style: TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  height: 220,
-                                  child: BarChart(
-                                    BarChartData(
-                                      alignment: BarChartAlignment.spaceAround,
-                                      maxY: (_chartData!['spots'] as List<FlSpot>)
-                                              .fold(0.0, (max, s) => s.y > max ? s.y : max) *
-                                          1.2,
-                                      barGroups: (_chartData!['spots'] as List<FlSpot>)
-                                          .map((spot) => BarChartGroupData(
-                                                x: spot.x.toInt(),
-                                                barRods: [
-                                                  BarChartRodData(
-                                                    toY: spot.y,
-                                                    color: Colors.blue,
-                                                    width: 22,
-                                                    borderRadius: BorderRadius.circular(4),
-                                                  ),
-                                                ],
-                                              ))
-                                          .toList(),
-                                      titlesData: FlTitlesData(
-                                        leftTitles: AxisTitles(
-                                          sideTitles: SideTitles(
-                                            showTitles: true,
-                                            reservedSize: 42,
-                                            getTitlesWidget: (value, meta) =>
-                                                Text('\$${value.toInt()}', style: const TextStyle(fontSize: 10)),
-                                          ),
-                                        ),
-                                        bottomTitles: AxisTitles(
-                                          sideTitles: SideTitles(
-                                            showTitles: true,
-                                            getTitlesWidget: (value, meta) {
-                                              final date =
-                                                  DateTime.now().subtract(Duration(days: 6 - value.toInt()));
-                                              return Text(DateFormat('dd/MM').format(date),
-                                                  style: const TextStyle(fontSize: 10));
-                                            },
-                                          ),
-                                        ),
-                                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                      ),
-                                      borderData: FlBorderData(show: false),
-                                      gridData: const FlGridData(show: false),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                      const SizedBox(height: 24),
-
-                      // Acciones rápidas
-                      const Text('Acciones rápidas',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 16),
-
-                      _buildButton(Icons.upload_file, 'Importar datos (.mipyme)', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.inventory, 'Carga masiva de inventario', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const BulkInventoryScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.bar_chart, 'Reportes financieros', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.attach_money, 'Flujo de Caja', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const CashFlowScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.account_balance, 'Impuestos (ONAT)', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const TaxScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.badge, 'Trámites ONAT', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const OnatAdvancedScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.assessment, 'Declaración ONAT', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const OnatDeclarationScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.receipt, 'Registros financieros', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancialRecordsScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.people, 'Nóminas', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const PayrollScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.business, 'Activos Fijos', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const AssetsScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.local_shipping, 'Proveedores', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SuppliersScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.account_balance_wallet, 'Presupuestos', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.insights, 'Predicciones', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const PredictionsScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.sync, 'Sincronizar con móvil', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SyncScreen()))),
-                      const SizedBox(height: 12),
-
-                      _buildButton(Icons.settings, 'Configuración', () =>
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
-
-                      const SizedBox(height: 32),
-                      Center(
-                        child: Text('v1.0.0 - Complemento Windows',
-                            style: TextStyle(color: Colors.grey.shade600)),
-                      ),
-                    ],
-                  ),
-                ),
+      body: Row(
+        children: [
+          // Menú lateral fijo
+          NavigationRail(
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: (index) {
+              setState(() => _selectedIndex = index);
+            },
+            labelType: NavigationRailLabelType.all,
+            leading: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Icon(Icons.store, size: 36),
+            ),
+            destinations: const [
+              NavigationRailDestination(icon: Icon(Icons.dashboard), label: Text('Inicio')),
+              NavigationRailDestination(icon: Icon(Icons.inventory), label: Text('Inventario')),
+              NavigationRailDestination(icon: Icon(Icons.upload_file), label: Text('Importar')),
+              NavigationRailDestination(icon: Icon(Icons.bar_chart), label: Text('Reportes')),
+              NavigationRailDestination(icon: Icon(Icons.account_balance), label: Text('Impuestos')),
+              NavigationRailDestination(icon: Icon(Icons.badge), label: Text('ONAT')),
+              NavigationRailDestination(icon: Icon(Icons.receipt), label: Text('Registros')),
+              NavigationRailDestination(icon: Icon(Icons.people), label: Text('Nóminas')),
+              NavigationRailDestination(icon: Icon(Icons.business), label: Text('Activos')),
+              NavigationRailDestination(icon: Icon(Icons.local_shipping), label: Text('Proveedores')),
+              NavigationRailDestination(icon: Icon(Icons.account_balance_wallet), label: Text('Presup.')),
+              NavigationRailDestination(icon: Icon(Icons.insights), label: Text('Predic.')),
+              NavigationRailDestination(icon: Icon(Icons.sync), label: Text('Sincr.')),
+              NavigationRailDestination(icon: Icon(Icons.settings), label: Text('Config.')),
+            ],
+          ),
+          const VerticalDivider(thickness: 1, width: 1),
+          // Contenido principal
+          Expanded(child: _loading ? const Center(child: CircularProgressIndicator()) : _pageForIndex(_selectedIndex)),
+        ],
+      ),
     );
   }
 
-  Widget _buildButton(IconData icon, String label, VoidCallback onPressed) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon),
-        label: Text(label),
+  // Contenido del dashboard (cuando se selecciona "Inicio")
+  Widget _buildDashboardContent() {
+    return _errorMessage != null
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(_errorMessage!, textAlign: TextAlign.center),
+                const SizedBox(height: 24),
+                ElevatedButton(onPressed: _refreshData, child: const Text('Reintentar')),
+              ],
+            ),
+          )
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tarjeta de licencia
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bienvenido, ${_license?.ownerName ?? "Usuario"}',
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Text('Plan: ${_license?.planType ?? "N/A"}'),
+                        if (_license != null)
+                          Text('Vence: ${_license!.expiryDate.toLocal().toString().substring(0, 10)}'),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // KPIs en dos filas
+                Row(
+                  children: [
+                    _buildKpiCard('Ingresos del mes', '\$${_totalIncome.toStringAsFixed(0)}', Icons.arrow_upward, Colors.green),
+                    const SizedBox(width: 12),
+                    _buildKpiCard('Gastos del mes', '\$${_totalExpenses.toStringAsFixed(0)}', Icons.arrow_downward, Colors.red),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _buildKpiCard('Ganancia neta', '\$${(_totalIncome - _totalExpenses).toStringAsFixed(0)}',
+                        Icons.account_balance_wallet, Colors.blue),
+                    const SizedBox(width: 12),
+                    _buildKpiCard('Empleados', '$_totalEmployees', Icons.people, Colors.orange),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _buildKpiCard('Próx. vencimientos', '$_upcomingTaxDeadlines', Icons.notifications_active, Colors.red),
+                    const SizedBox(width: 12),
+                    const Expanded(child: SizedBox.shrink()), // Espacio restante
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Gráfico de ingresos
+                if (_chartData != null && (_chartData!['spots'] as List).isNotEmpty)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Ingresos (últimos 7 días)', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            height: 220,
+                            child: BarChart(
+                              BarChartData(
+                                alignment: BarChartAlignment.spaceAround,
+                                maxY: (_chartData!['spots'] as List<FlSpot>)
+                                        .fold(0.0, (max, s) => s.y > max ? s.y : max) *
+                                    1.2,
+                                barGroups: (_chartData!['spots'] as List<FlSpot>)
+                                    .map((spot) => BarChartGroupData(
+                                          x: spot.x.toInt(),
+                                          barRods: [
+                                            BarChartRodData(
+                                              toY: spot.y,
+                                              color: Colors.blue,
+                                              width: 22,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                          ],
+                                        ))
+                                    .toList(),
+                                titlesData: FlTitlesData(
+                                  leftTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      reservedSize: 42,
+                                      getTitlesWidget: (value, meta) =>
+                                          Text('\$${value.toInt()}', style: const TextStyle(fontSize: 10)),
+                                    ),
+                                  ),
+                                  bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      getTitlesWidget: (value, meta) {
+                                        final date =
+                                            DateTime.now().subtract(Duration(days: 6 - value.toInt()));
+                                        return Text(DateFormat('dd/MM').format(date),
+                                            style: const TextStyle(fontSize: 10));
+                                      },
+                                    ),
+                                  ),
+                                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                ),
+                                borderData: FlBorderData(show: false),
+                                gridData: const FlGridData(show: false),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+  }
+
+  Widget _buildKpiCard(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 32),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
+              ),
+              const SizedBox(height: 4),
+              Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
       ),
     );
   }
