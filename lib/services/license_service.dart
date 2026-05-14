@@ -53,15 +53,39 @@ class LicenseService {
   }
 
   static Future<LicenseInfo?> getStoredInfo() async {
-    final json = await _storage.read(key: _keyLicenseInfo);
-    if (json == null) return null;
-    return LicenseInfo.fromJson(jsonDecode(json));
+    try {
+      final json = await _storage.read(key: _keyLicenseInfo);
+      if (json == null) return null;
+      return LicenseInfo.fromJson(jsonDecode(json));
+    } catch (_) {
+      return null;
+    }
   }
 
-  static bool validateActivationCode(String code) {
+  static LicenseInfo? validateActivationCode(String code) {
+    try {
+      // Intentar primero como nuevo formato (base64 sin firma)
+      final payloadBytes = base64Decode(code.trim());
+      final payloadString = utf8.decode(payloadBytes);
+      final json = jsonDecode(payloadString) as Map<String, dynamic>;
+      if (json['type'] == 'windows_activation') {
+        return LicenseInfo(
+          ownerName: json['owner_name'] as String,
+          phoneNumber: json['phone'] as String,
+          maxSellers: 1,
+          expiryDate: DateTime.parse(json['expiry_date'] as String),
+          planType: json['plan'] as String,
+          deviceId: json['device_id'] as String,
+        );
+      }
+    } catch (_) {
+      // Si falla, intentar con formato antiguo (payload.firma)
+    }
+
+    // Validación con RSA (formato antiguo)
     try {
       final parts = code.split('.');
-      if (parts.length != 2) return false;
+      if (parts.length != 2) return null;
       final payloadBase64 = parts[0];
       final signatureBase64 = parts[1];
 
@@ -71,22 +95,42 @@ class LicenseService {
 
       final signer = RSASigner(SHA256Digest(), '0609608648016503040201');
       signer.init(false, PublicKeyParameter<RSAPublicKey>(_publicKey));
-      return signer.verifySignature(
+      final valid = signer.verifySignature(
           Uint8List.fromList(utf8.encode(payloadString)),
           RSASignature(signatureBytes));
-    } catch (_) {
-      return false;
-    }
+
+      if (!valid) return null;
+
+      final json = jsonDecode(payloadString) as Map<String, dynamic>;
+      if (json['type'] == 'windows_activation') {
+        return LicenseInfo(
+          ownerName: json['owner_name'] as String,
+          phoneNumber: json['phone'] as String,
+          maxSellers: 1,
+          expiryDate: DateTime.parse(json['expiry_date'] as String),
+          planType: json['plan'] as String,
+          deviceId: json['device_id'] as String,
+        );
+      }
+    } catch (_) {}
+
+    return null;
   }
 
   static Future<void> saveActivation(String code) async {
-    final parts = code.split('.');
-    final payloadBytes = base64Decode(parts[0]);
-    final payloadString = utf8.decode(payloadBytes);
-    final json = jsonDecode(payloadString) as Map<String, dynamic>;
+    try {
+      final parts = code.contains('.') ? code.split('.') : ['', code];
+      final payloadBytes = base64Decode(parts.length == 2 ? parts[0] : parts[1]);
+      final payloadString = utf8.decode(payloadBytes);
+      final json = jsonDecode(payloadString) as Map<String, dynamic>;
 
-    await _storage.write(key: _keyActivated, value: 'true');
-    await _storage.write(key: _keyLicenseInfo, value: jsonEncode(json));
+      await _storage.write(key: _keyActivated, value: 'true');
+      await _storage.write(key: _keyLicenseInfo, value: jsonEncode(json));
+    } catch (e) {
+      // Si no se puede decodificar, al menos guardamos la activación
+      await _storage.write(key: _keyActivated, value: 'true');
+      rethrow;
+    }
   }
 
   static Future<void> deactivate() async {
