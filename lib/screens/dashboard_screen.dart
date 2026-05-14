@@ -35,8 +35,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    final license = await LicenseService.getStoredInfo();
-
+       LicenseInfo? license;
+    try {
+      license = await LicenseService.getStoredInfo();
+    } catch (_) {
+      // Si no hay licencia, redirigir a activación
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        );
+        return;
+      }
+    }
+  
     // Cargar datos para el gráfico (últimos 7 días)
     final today = DateTime.now();
     final spots = <FlSpot>[];
