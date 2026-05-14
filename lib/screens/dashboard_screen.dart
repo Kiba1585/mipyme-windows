@@ -30,6 +30,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   LicenseInfo? _license;
   Map<String, dynamic>? _chartData;
   bool _loading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -38,9 +39,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _errorMessage = null; });
 
-    // Cargar datos de la licencia
+    try {
+      // Timeout global para toda la carga: 15 segundos
+      await _doLoad().timeout(const Duration(seconds: 15));
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error al cargar los datos: ${e.toString()}';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _doLoad() async {
+    // 1. Licencia
     try {
       _license = await LicenseService.getStoredInfo();
     } catch (_) {
@@ -53,7 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    // Cargar datos para el gráfico (últimos 7 días)
+    // 2. Datos del gráfico
     try {
       final today = DateTime.now();
       final spots = <FlSpot>[];
@@ -67,8 +81,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (_) {
       _chartData = {'spots': <FlSpot>[]};
     }
-
-    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _refreshData() async {
@@ -89,214 +101,175 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: Text(_license?.ownerName ?? 'MIPYME Windows'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshData,
-            tooltip: 'Actualizar datos',
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Desactivar',
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData),
+          IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Información de la licencia
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Bienvenido, ${_license?.ownerName ?? "Usuario"}',
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          Text('Plan: ${_license?.planType ?? "N/A"}'),
-                          if (_license != null)
-                            Text('Vence: ${_license!.expiryDate.toLocal().toString().substring(0, 10)}'),
-                        ],
-                      ),
+          : _errorMessage != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error, size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text(_errorMessage!, textAlign: TextAlign.center),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: _refreshData,
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
                     ),
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // Gráfico de barras (últimos 7 días)
-                  if (_chartData != null && (_chartData!['spots'] as List).isNotEmpty)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Ingresos (últimos 7 días)',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              height: 220,
-                              child: BarChart(
-                                BarChartData(
-                                  alignment: BarChartAlignment.spaceAround,
-                                  maxY: (_chartData!['spots'] as List<FlSpot>)
-                                          .fold(0.0, (max, s) => s.y > max ? s.y : max) *
-                                      1.2,
-                                  barGroups: (_chartData!['spots'] as List<FlSpot>)
-                                      .map((spot) => BarChartGroupData(
-                                            x: spot.x.toInt(),
-                                            barRods: [
-                                              BarChartRodData(
-                                                toY: spot.y,
-                                                color: Colors.blue,
-                                                width: 22,
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                            ],
-                                          ))
-                                      .toList(),
-                                  titlesData: FlTitlesData(
-                                    leftTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        reservedSize: 42,
-                                        getTitlesWidget: (value, meta) => Text(
-                                          '\$${value.toInt()}',
-                                          style: const TextStyle(fontSize: 10),
-                                        ),
-                                      ),
-                                    ),
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        getTitlesWidget: (value, meta) {
-                                          final date = DateTime.now()
-                                              .subtract(Duration(days: 6 - value.toInt()));
-                                          return Text(
-                                            DateFormat('dd/MM').format(date),
-                                            style: const TextStyle(fontSize: 10),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    topTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    rightTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                  ),
-                                  borderData: FlBorderData(show: false),
-                                  gridData: const FlGridData(show: false),
-                                ),
-                              ),
-                            ),
-                          ],
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Tarjeta de licencia
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Bienvenido, ${_license?.ownerName ?? "Usuario"}',
+                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              Text('Plan: ${_license?.planType ?? "N/A"}'),
+                              if (_license != null)
+                                Text('Vence: ${_license!.expiryDate.toLocal().toString().substring(0, 10)}'),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 24),
 
-                  const SizedBox(height: 24),
+                      // Gráfico
+                      if (_chartData != null && (_chartData!['spots'] as List).isNotEmpty)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Ingresos (últimos 7 días)', style: TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  height: 220,
+                                  child: BarChart(
+                                    BarChartData(
+                                      alignment: BarChartAlignment.spaceAround,
+                                      maxY: (_chartData!['spots'] as List<FlSpot>)
+                                              .fold(0.0, (max, s) => s.y > max ? s.y : max) *
+                                          1.2,
+                                      barGroups: (_chartData!['spots'] as List<FlSpot>)
+                                          .map((spot) => BarChartGroupData(
+                                                x: spot.x.toInt(),
+                                                barRods: [
+                                                  BarChartRodData(
+                                                    toY: spot.y,
+                                                    color: Colors.blue,
+                                                    width: 22,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                ],
+                                              ))
+                                          .toList(),
+                                      titlesData: FlTitlesData(
+                                        leftTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            reservedSize: 42,
+                                            getTitlesWidget: (value, meta) => Text(
+                                              '\$${value.toInt()}',
+                                              style: const TextStyle(fontSize: 10),
+                                            ),
+                                          ),
+                                        ),
+                                        bottomTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            getTitlesWidget: (value, meta) {
+                                              final date = DateTime.now()
+                                                  .subtract(Duration(days: 6 - value.toInt()));
+                                              return Text(
+                                                DateFormat('dd/MM').format(date),
+                                                style: const TextStyle(fontSize: 10),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                      ),
+                                      borderData: FlBorderData(show: false),
+                                      gridData: const FlGridData(show: false),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
 
-                  // Acciones rápidas
-                  const Text('Acciones rápidas',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 16),
+                      const SizedBox(height: 24),
 
-                  _buildButton(Icons.upload_file, 'Importar datos (.mipyme)', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const ImportScreen()));
-                  }),
-                  const SizedBox(height: 12),
+                      // Acciones rápidas
+                      const Text('Acciones rápidas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 16),
+                      _buildButton(Icons.upload_file, 'Importar datos (.mipyme)', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.bar_chart, 'Reportes financieros', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.attach_money, 'Flujo de Caja', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const CashFlowScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.account_balance, 'Impuestos (ONAT)', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const TaxScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.badge, 'Trámites ONAT', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const OnatAdvancedScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.assessment, 'Declaración ONAT', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const OnatDeclarationScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.receipt, 'Registros financieros', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancialRecordsScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.people, 'Nóminas', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const PayrollScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.business, 'Activos Fijos', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const AssetsScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.local_shipping, 'Proveedores', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SuppliersScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.account_balance_wallet, 'Presupuestos', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.insights, 'Predicciones', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const PredictionsScreen()))),
+                      const SizedBox(height: 12),
+                      _buildButton(Icons.sync, 'Sincronizar con móvil', () =>
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SyncScreen()))),
 
-                  _buildButton(Icons.bar_chart, 'Reportes financieros', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const ReportsScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.attach_money, 'Flujo de Caja', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const CashFlowScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.account_balance, 'Impuestos (ONAT)', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const TaxScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.badge, 'Trámites ONAT', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const OnatAdvancedScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.assessment, 'Declaración ONAT', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const OnatDeclarationScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.receipt, 'Registros financieros', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const FinancialRecordsScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.people, 'Nóminas', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const PayrollScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.business, 'Activos Fijos', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const AssetsScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.local_shipping, 'Proveedores', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const SuppliersScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.account_balance_wallet, 'Presupuestos', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const BudgetScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.insights, 'Predicciones', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const PredictionsScreen()));
-                  }),
-                  const SizedBox(height: 12),
-
-                  _buildButton(Icons.sync, 'Sincronizar con móvil', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const SyncScreen()));
-                  }),
-
-                  const SizedBox(height: 32),
-                  Center(
-                    child: Text(
-                      'v1.0.0 - Complemento Windows',
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
+                      const SizedBox(height: 32),
+                      Center(
+                        child: Text('v1.0.0 - Complemento Windows',
+                            style: TextStyle(color: Colors.grey.shade600)),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
     );
   }
 
