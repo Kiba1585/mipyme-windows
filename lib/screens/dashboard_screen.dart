@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../services/license_service.dart';
 import '../services/database_service.dart';
+import '../services/export_excel_service.dart';
 import '../models/license_info.dart';
 import 'activation_screen.dart';
 import 'import_screen.dart';
@@ -33,9 +34,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _chartData;
   bool _loading = true;
   String? _errorMessage;
-  int _selectedIndex = 0; // Para el NavigationRail
+  int _selectedIndex = 0;
 
-  // KPIs
   double _totalIncome = 0;
   double _totalExpenses = 0;
   int _upcomingTaxDeadlines = 0;
@@ -63,7 +63,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _doLoad() async {
-    // Licencia
     try {
       _license = await LicenseService.getStoredInfo();
     } catch (_) {
@@ -76,7 +75,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    // Datos del gráfico (últimos 7 días)
     try {
       final today = DateTime.now();
       final spots = <FlSpot>[];
@@ -91,7 +89,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _chartData = {'spots': <FlSpot>[]};
     }
 
-    // KPIs
     try {
       final now = DateTime.now();
       final monthStart = DateFormat('yyyy-MM-01').format(now);
@@ -99,23 +96,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _totalIncome = await DatabaseService.getTotalByType('income', monthStart, monthEnd);
       _totalExpenses = await DatabaseService.getTotalByType('expense', monthStart, monthEnd);
 
-      // Empleados
       final employees = await DatabaseService.getEmployees();
       _totalEmployees = employees.length;
 
-      // Próximos vencimientos (simplificado: 1 si hay recordatorio para el mes siguiente)
       final upcoming = await DatabaseService.getCashflowProjection(
         DateFormat('yyyy-MM').format(DateTime.now().add(const Duration(days: 30))),
       );
       _upcomingTaxDeadlines = upcoming != null ? 1 : 0;
-    } catch (_) {
-      // Valores por defecto si falla
-    }
+    } catch (_) {}
   }
 
-  Future<void> _refreshData() async {
-    await _loadData();
-  }
+  Future<void> _refreshData() async => _loadData();
 
   void _logout() {
     LicenseService.deactivate();
@@ -125,7 +116,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Pantallas de destino según índice del menú
   Widget _pageForIndex(int index) {
     switch (index) {
       case 0:
@@ -173,12 +163,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: Row(
         children: [
-          // Menú lateral fijo
           NavigationRail(
             selectedIndex: _selectedIndex,
-            onDestinationSelected: (index) {
-              setState(() => _selectedIndex = index);
-            },
+            onDestinationSelected: (index) => setState(() => _selectedIndex = index),
             labelType: NavigationRailLabelType.all,
             leading: const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
@@ -202,14 +189,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const VerticalDivider(thickness: 1, width: 1),
-          // Contenido principal
           Expanded(child: _loading ? const Center(child: CircularProgressIndicator()) : _pageForIndex(_selectedIndex)),
         ],
       ),
     );
   }
 
-  // Contenido del dashboard (cuando se selecciona "Inicio")
   Widget _buildDashboardContent() {
     return _errorMessage != null
         ? Center(
@@ -229,7 +214,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Tarjeta de licencia
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -247,8 +231,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // KPIs en dos filas
                 Row(
                   children: [
                     _buildKpiCard('Ingresos del mes', '\$${_totalIncome.toStringAsFixed(0)}', Icons.arrow_upward, Colors.green),
@@ -270,12 +252,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     _buildKpiCard('Próx. vencimientos', '$_upcomingTaxDeadlines', Icons.notifications_active, Colors.red),
                     const SizedBox(width: 12),
-                    const Expanded(child: SizedBox.shrink()), // Espacio restante
+                    const Expanded(child: SizedBox.shrink()),
                   ],
                 ),
                 const SizedBox(height: 24),
-
-                // Gráfico de ingresos
                 if (_chartData != null && (_chartData!['spots'] as List).isNotEmpty)
                   Card(
                     child: Padding(
@@ -338,6 +318,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                   ),
+                const SizedBox(height: 24),
+                const Text('Acciones rápidas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 16),
+                _buildButton(Icons.upload_file, 'Importar datos (.mipyme)', () =>
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportScreen()))),
+                const SizedBox(height: 12),
+                _buildButton(Icons.inventory, 'Carga masiva de inventario', () =>
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const BulkInventoryScreen()))),
+                const SizedBox(height: 12),
+                _buildButton(Icons.bar_chart, 'Reportes financieros', () =>
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen()))),
+                const SizedBox(height: 12),
+                _buildButton(Icons.table_chart, 'Exportar a Excel', () async {
+                  try {
+                    final path = await ExportExcelService.exportFinancialRecordsToExcel();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Excel exportado a: $path')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e')),
+                      );
+                    }
+                  }
+                }),
               ],
             ),
           );
@@ -352,15 +360,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Icon(icon, color: color, size: 32),
               const SizedBox(height: 8),
-              Text(
-                value,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
-              ),
+              Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
               const SizedBox(height: 4),
               Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildButton(IconData icon, String label, VoidCallback onPressed) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
       ),
     );
   }
