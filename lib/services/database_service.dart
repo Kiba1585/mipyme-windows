@@ -12,14 +12,24 @@ class DatabaseService {
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
+    try {
+      final db = await _initDatabase().timeout(const Duration(seconds: 10));
+      _database = db;
+      return db;
+    } catch (e) {
+      throw Exception('No se pudo abrir la base de datos. Error: $e');
+    }
+  }
+
+  static Future<Database> _initDatabase() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     final dir = await getApplicationDocumentsDirectory();
     final dbPath = p.join(dir.path, 'mipyme_windows.db');
-    _database = await databaseFactoryFfi.openDatabase(
+    return await databaseFactoryFfi.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onCreate: (db, version) async {
           await _createTables(db);
         },
@@ -75,10 +85,19 @@ class DatabaseService {
               )
             ''');
           }
+          if (oldVersion < 6) {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS reminders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                deadline TEXT NOT NULL,
+                created_at TEXT NOT NULL
+              )
+            ''');
+          }
         },
       ),
     );
-    return _database!;
   }
 
   static Future<void> _createTables(Database db) async {
@@ -90,6 +109,7 @@ class DatabaseService {
         data TEXT NOT NULL
       )
     ''');
+
     await db.execute('''
       CREATE TABLE financial_records (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +120,7 @@ class DatabaseService {
         description TEXT
       )
     ''');
+
     await db.execute('''
       CREATE TABLE tax_calculations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,6 +132,7 @@ class DatabaseService {
         calculated_date TEXT NOT NULL
       )
     ''');
+
     await db.execute('''
       CREATE TABLE suppliers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,6 +142,7 @@ class DatabaseService {
         notes TEXT
       )
     ''');
+
     await db.execute('''
       CREATE TABLE budgets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,6 +152,7 @@ class DatabaseService {
         notes TEXT
       )
     ''');
+
     await db.execute('''
       CREATE TABLE employees (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,6 +161,7 @@ class DatabaseService {
         notes TEXT
       )
     ''');
+
     await db.execute('''
       CREATE TABLE assets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,12 +171,22 @@ class DatabaseService {
         acquisition_date TEXT NOT NULL
       )
     ''');
+
     await db.execute('''
       CREATE TABLE cashflow_projections (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         month TEXT NOT NULL UNIQUE,
         projected_income REAL NOT NULL,
         projected_expenses REAL NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        deadline TEXT NOT NULL,
+        created_at TEXT NOT NULL
       )
     ''');
   }
@@ -209,8 +244,7 @@ class DatabaseService {
       where += ' AND type = ?';
       args.add(type);
     }
-    return await db.query('financial_records',
-        where: where, whereArgs: args, orderBy: 'date DESC');
+    return await db.query('financial_records', where: where, whereArgs: args, orderBy: 'date DESC');
   }
 
   static Future<double> getTotalByType(String type, String startDate, String endDate) async {
@@ -268,8 +302,7 @@ class DatabaseService {
 
   static Future<void> updateSupplier(Supplier supplier) async {
     final db = await database;
-    await db.update('suppliers', supplier.toMap(),
-        where: 'id = ?', whereArgs: [supplier.id]);
+    await db.update('suppliers', supplier.toMap(), where: 'id = ?', whereArgs: [supplier.id]);
   }
 
   static Future<void> deleteSupplier(int id) async {
@@ -304,8 +337,7 @@ class DatabaseService {
     final db = await database;
     List<Map<String, dynamic>> maps;
     if (search != null && search.isNotEmpty) {
-      maps = await db.query('employees',
-          where: 'name LIKE ?', whereArgs: ['%$search%'], orderBy: 'name');
+      maps = await db.query('employees', where: 'name LIKE ?', whereArgs: ['%$search%'], orderBy: 'name');
     } else {
       maps = await db.query('employees', orderBy: 'name');
     }
@@ -330,8 +362,7 @@ class DatabaseService {
   }
 
   // ==================== CASHFLOW PROJECTIONS ====================
-  static Future<void> saveCashflowProjection(
-      String month, double income, double expenses) async {
+  static Future<void> saveCashflowProjection(String month, double income, double expenses) async {
     final db = await database;
     await db.insert(
       'cashflow_projections',
@@ -342,8 +373,7 @@ class DatabaseService {
 
   static Future<Map<String, dynamic>?> getCashflowProjection(String month) async {
     final db = await database;
-    final maps = await db.query('cashflow_projections',
-        where: 'month = ?', whereArgs: [month]);
+    final maps = await db.query('cashflow_projections', where: 'month = ?', whereArgs: [month]);
     if (maps.isEmpty) return null;
     return maps.first;
   }
