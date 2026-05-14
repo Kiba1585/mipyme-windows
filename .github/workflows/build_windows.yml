@@ -43,12 +43,18 @@ jobs:
       - name: Compilar ejecutable Windows
         run: flutter build windows --release
 
+      - name: Limpiar archivos de depuración
+        run: |
+          Remove-Item -Path build\windows\x64\runner\Release\*.pdb -ErrorAction SilentlyContinue
+          Remove-Item -Path build\windows\x64\runner\Release\*.debug -ErrorAction SilentlyContinue
+
       - name: Empaquetar ejecutable en ZIP
         run: |
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath mipyme-windows.zip
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath mipyme-windows.zip
 
       - name: Subir ZIP como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: mipyme-windows
           path: mipyme-windows.zip
+          retention-days: 3
