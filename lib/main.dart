@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'screens/activation_screen.dart';
 import 'core/theme/app_theme.dart';
+import 'services/alert_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  AlertService.initialize();
+  AlertService.startPeriodicCheck();
   runApp(const MipymeWindowsApp());
 }
 
