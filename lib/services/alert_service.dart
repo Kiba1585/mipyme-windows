@@ -3,9 +3,7 @@ import 'package:intl/intl.dart';
 import 'database_service.dart';
 
 class AlertService {
-  /// Comprueba todas las condiciones de alerta y muestra notificaciones si es necesario.
   static Future<void> checkAndNotify() async {
-    // 1. Vencimientos de impuestos
     final upcoming = await DatabaseService.getCashflowProjection(
       DateFormat('yyyy-MM').format(DateTime.now().add(const Duration(days: 30))),
     );
@@ -16,7 +14,6 @@ class AlertService {
       );
     }
 
-    // 2. Presupuestos sobrepasados
     final currentMonth = DateFormat('yyyy-MM').format(DateTime.now());
     final budget = await DatabaseService.getBudget(currentMonth);
     if (budget != null) {
@@ -26,18 +23,21 @@ class AlertService {
       if (realExpenses > budget.projectedExpenses) {
         await _showNotification(
           'Presupuesto excedido',
-          'Los gastos reales (\$${realExpenses.toStringAsFixed(0)}) superan el presupuesto (\$${budget.projectedExpenses.toStringAsFixed(0)}).',
+          'Los gastos reales superan el presupuesto.',
         );
       }
     }
   }
 
-  /// Muestra una notificación local en Windows.
   static Future<void> _showNotification(String title, String body) async {
-    await localNotifier.notify(title, body, icon: null);
+    await localNotifier.notify(
+      LocalNotification(
+        title: title,
+        body: body,
+      ),
+    );
   }
 
-  /// Inicializa el sistema de notificaciones (solo necesario la primera vez).
   static Future<void> initialize() async {
     await localNotifier.setup(
       appName: 'MIPYME Windows',
@@ -45,7 +45,6 @@ class AlertService {
     );
   }
 
-  /// Programa una verificación periódica cada hora.
   static void startPeriodicCheck() {
     Future.doWhile(() async {
       await checkAndNotify();
