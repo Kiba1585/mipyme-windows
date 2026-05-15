@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/data_import_service.dart';
+import '../core/theme/theme_scope.dart';
 
 class ImportScreen extends StatefulWidget {
   const ImportScreen({super.key});
@@ -29,6 +30,14 @@ class _ImportScreenState extends State<ImportScreen> {
     }
 
     await DataImportService.saveLocalData(data);
+
+    // Sincronizar tema si viene en los datos
+    if (data.containsKey('theme_preference')) {
+      final isDark = data['theme_preference'] == 'dark';
+      ThemeScope.of(context)?.onThemeChanged(isDark);
+      // También podrías guardar en storage, pero ThemeScope ya lo hace internamente
+    }
+
     setState(() {
       _data = data;
       _status = 'Archivo importado correctamente.';
@@ -60,6 +69,19 @@ class _ImportScreenState extends State<ImportScreen> {
                 color: _data != null ? Colors.green.shade50 : Colors.orange.shade50,
                 child: Text(_status!),
               ),
+            if (_data != null) ...[
+              const SizedBox(height: 24),
+              const Text('Vista previa de los datos importados:'),
+              const SizedBox(height: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Text(
+                    _data.toString(),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
