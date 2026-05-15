@@ -21,6 +21,7 @@ import 'payroll_screen.dart';
 import 'assets_screen.dart';
 import 'bulk_inventory_screen.dart';
 import 'settings_screen.dart';
+import 'analytics_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -143,8 +144,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 11:
         return const PredictionsScreen();
       case 12:
-        return const SyncScreen();
+        return const AnalyticsScreen();
       case 13:
+        return const SyncScreen();
+      case 14:
         return const SettingsScreen();
       default:
         return _buildDashboardContent();
@@ -184,6 +187,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               NavigationRailDestination(icon: Icon(Icons.local_shipping), label: Text('Proveedores')),
               NavigationRailDestination(icon: Icon(Icons.account_balance_wallet), label: Text('Presup.')),
               NavigationRailDestination(icon: Icon(Icons.insights), label: Text('Predic.')),
+              NavigationRailDestination(icon: Icon(Icons.analytics), label: Text('Analítica')),
               NavigationRailDestination(icon: Icon(Icons.sync), label: Text('Sincr.')),
               NavigationRailDestination(icon: Icon(Icons.settings), label: Text('Config.')),
             ],
