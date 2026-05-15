@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/license_service.dart';
 import 'dashboard_screen.dart';
+import 'setup_wizard.dart';
 
 class ActivationScreen extends StatefulWidget {
   const ActivationScreen({super.key});
@@ -23,10 +25,19 @@ class _ActivationScreenState extends State<ActivationScreen> {
   Future<void> _checkIfAlreadyActivated() async {
     final activated = await LicenseService.isActivated();
     if (activated && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-      );
+      const storage = FlutterSecureStorage();
+      final wizardDone = await storage.read(key: 'setup_wizard_completed');
+      if (wizardDone == 'true') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const SetupWizard()),
+        );
+      }
     }
   }
 
@@ -47,10 +58,20 @@ class _ActivationScreenState extends State<ActivationScreen> {
       if (info != null) {
         await LicenseService.saveActivation(code);
         if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
-        );
+
+        const storage = FlutterSecureStorage();
+        final wizardDone = await storage.read(key: 'setup_wizard_completed');
+        if (wizardDone == 'true') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const SetupWizard()),
+          );
+        }
       } else {
         setState(() => _error = 'Código inválido o expirado');
       }
