@@ -18,8 +18,8 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
   double _totalIncome = 0;
   double _totalExpenses = 0;
   bool _loading = true;
+  String? _error;
 
-  // Proyecciones
   final _projIncomeCtrl = TextEditingController();
   final _projExpenseCtrl = TextEditingController();
   double? _projectedIncome;
@@ -32,46 +32,53 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _loading = true);
-    final monthStr = _monthFormat.format(_selectedDate);
-    final daysInMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
-
-    final incomeSpots = <FlSpot>[];
-    final expenseSpots = <FlSpot>[];
-    double totalIncome = 0;
-    double totalExpenses = 0;
-
-    for (int day = 1; day <= daysInMonth; day++) {
-      final dateStr = '$monthStr-${day.toString().padLeft(2, '0')}';
-      final income = await DatabaseService.getTotalByType('income', dateStr, dateStr);
-      final expense = await DatabaseService.getTotalByType('expense', dateStr, dateStr);
-      incomeSpots.add(FlSpot(day.toDouble(), income));
-      expenseSpots.add(FlSpot(day.toDouble(), expense));
-      totalIncome += income;
-      totalExpenses += expense;
-    }
-
-    // Cargar proyección si existe
-    final proj = await DatabaseService.getCashflowProjection(monthStr);
-    if (proj != null) {
-      _projectedIncome = proj['projected_income'] as double;
-      _projectedExpenses = proj['projected_expenses'] as double;
-      _projIncomeCtrl.text = _projectedIncome!.toString();
-      _projExpenseCtrl.text = _projectedExpenses!.toString();
-    } else {
-      _projectedIncome = null;
-      _projectedExpenses = null;
-      _projIncomeCtrl.clear();
-      _projExpenseCtrl.clear();
-    }
-
     setState(() {
-      _incomeSpots = incomeSpots;
-      _expenseSpots = expenseSpots;
-      _totalIncome = totalIncome;
-      _totalExpenses = totalExpenses;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final monthStr = _monthFormat.format(_selectedDate);
+      final daysInMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
+
+      final incomeSpots = <FlSpot>[];
+      final expenseSpots = <FlSpot>[];
+      double totalIncome = 0;
+      double totalExpenses = 0;
+
+      for (int day = 1; day <= daysInMonth; day++) {
+        final dateStr = '$monthStr-${day.toString().padLeft(2, '0')}';
+        final income = await DatabaseService.getTotalByType('income', dateStr, dateStr);
+        final expense = await DatabaseService.getTotalByType('expense', dateStr, dateStr);
+        incomeSpots.add(FlSpot(day.toDouble(), income));
+        expenseSpots.add(FlSpot(day.toDouble(), expense));
+        totalIncome += income;
+        totalExpenses += expense;
+      }
+
+      final proj = await DatabaseService.getCashflowProjection(monthStr);
+      if (proj != null) {
+        _projectedIncome = proj['projected_income'] as double;
+        _projectedExpenses = proj['projected_expenses'] as double;
+        _projIncomeCtrl.text = _projectedIncome!.toString();
+        _projExpenseCtrl.text = _projectedExpenses!.toString();
+      } else {
+        _projectedIncome = null;
+        _projectedExpenses = null;
+        _projIncomeCtrl.clear();
+        _projExpenseCtrl.clear();
+      }
+
+      setState(() {
+        _incomeSpots = incomeSpots;
+        _expenseSpots = expenseSpots;
+        _totalIncome = totalIncome;
+        _totalExpenses = totalExpenses;
+      });
+    } catch (e) {
+      _error = 'Error al cargar flujo de caja.\n$e';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _saveProjection() async {
@@ -113,167 +120,157 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Mes: $monthStr',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-
-                  // Resumen
-                  Row(
+          : _error != null
+              ? _buildError()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSummaryCard('Ingresos', _totalIncome, Colors.green),
-                      const SizedBox(width: 16),
-                      _buildSummaryCard('Gastos', _totalExpenses, Colors.red),
-                      const SizedBox(width: 16),
-                      _buildSummaryCard('Balance', _totalIncome - _totalExpenses,
-                          _totalIncome - _totalExpenses >= 0 ? Colors.blue : Colors.red),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Proyección
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Text('Mes: $monthStr',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 16),
+                      Row(
                         children: [
-                          const Text('Proyección del mes',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          Row(
+                          _buildSummaryCard('Ingresos', _totalIncome, Colors.green),
+                          const SizedBox(width: 16),
+                          _buildSummaryCard('Gastos', _totalExpenses, Colors.red),
+                          const SizedBox(width: 16),
+                          _buildSummaryCard('Balance', _totalIncome - _totalExpenses,
+                              _totalIncome - _totalExpenses >= 0 ? Colors.blue : Colors.red),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _projIncomeCtrl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Ingresos esperados',
-                                    border: OutlineInputBorder(),
-                                    prefixText: '\$ ',
+                              const Text('Proyección del mes',
+                                  style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _projIncomeCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Ingresos esperados',
+                                        border: OutlineInputBorder(),
+                                        prefixText: '\$ ',
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                    ),
                                   ),
-                                  keyboardType: TextInputType.number,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _projExpenseCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Gastos esperados',
+                                        border: OutlineInputBorder(),
+                                        prefixText: '\$ ',
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 40,
+                                child: ElevatedButton.icon(
+                                  onPressed: _saveProjection,
+                                  icon: const Icon(Icons.save, size: 18),
+                                  label: const Text('Guardar proyección'),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextField(
-                                  controller: _projExpenseCtrl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Gastos esperados',
-                                    border: OutlineInputBorder(),
-                                    prefixText: '\$ ',
+                              if (_projectedIncome != null) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    _buildComparison('Ingresos', _projectedIncome!, _totalIncome),
+                                    const SizedBox(width: 12),
+                                    _buildComparison('Gastos', _projectedExpenses!, _totalExpenses),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Ingresos vs Gastos (diario)',
+                                  style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                height: 250,
+                                child: LineChart(
+                                  LineChartData(
+                                    lineBarsData: [
+                                      LineChartBarData(
+                                        spots: _incomeSpots,
+                                        isCurved: true,
+                                        color: Colors.green,
+                                        barWidth: 2,
+                                        dotData: const FlDotData(show: false),
+                                      ),
+                                      LineChartBarData(
+                                        spots: _expenseSpots,
+                                        isCurved: true,
+                                        color: Colors.red,
+                                        barWidth: 2,
+                                        dotData: const FlDotData(show: false),
+                                      ),
+                                    ],
+                                    titlesData: FlTitlesData(
+                                      leftTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 42,
+                                          getTitlesWidget: (value, meta) => Text(
+                                            '\$${value.toInt()}',
+                                            style: const TextStyle(fontSize: 10),
+                                          ),
+                                        ),
+                                      ),
+                                      bottomTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          getTitlesWidget: (value, meta) {
+                                            final day = value.toInt();
+                                            if (day % 5 == 0 || day == 1) {
+                                              return Text('$day', style: const TextStyle(fontSize: 10));
+                                            }
+                                            return const Text('');
+                                          },
+                                        ),
+                                      ),
+                                      topTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false)),
+                                      rightTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false)),
+                                    ),
+                                    borderData: FlBorderData(show: false),
+                                    gridData: const FlGridData(show: false),
                                   ),
-                                  keyboardType: TextInputType.number,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 40,
-                            child: ElevatedButton.icon(
-                              onPressed: _saveProjection,
-                              icon: const Icon(Icons.save, size: 18),
-                              label: const Text('Guardar proyección'),
-                            ),
-                          ),
-                          if (_projectedIncome != null) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                _buildComparison(
-                                    'Ingresos', _projectedIncome!, _totalIncome),
-                                const SizedBox(width: 12),
-                                _buildComparison(
-                                    'Gastos', _projectedExpenses!, _totalExpenses),
-                              ],
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // Gráfico de líneas
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Ingresos vs Gastos (diario)',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 250,
-                            child: LineChart(
-                              LineChartData(
-                                lineBarsData: [
-                                  LineChartBarData(
-                                    spots: _incomeSpots,
-                                    isCurved: true,
-                                    color: Colors.green,
-                                    barWidth: 2,
-                                    dotData: const FlDotData(show: false),
-                                  ),
-                                  LineChartBarData(
-                                    spots: _expenseSpots,
-                                    isCurved: true,
-                                    color: Colors.red,
-                                    barWidth: 2,
-                                    dotData: const FlDotData(show: false),
-                                  ),
-                                ],
-                                titlesData: FlTitlesData(
-                                  leftTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      reservedSize: 42,
-                                      getTitlesWidget: (value, meta) => Text(
-                                        '\$${value.toInt()}',
-                                        style: const TextStyle(fontSize: 10),
-                                      ),
-                                    ),
-                                  ),
-                                  bottomTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      getTitlesWidget: (value, meta) {
-                                        final day = value.toInt();
-                                        if (day % 5 == 0 || day == 1) {
-                                          return Text('$day',
-                                              style: const TextStyle(fontSize: 10));
-                                        }
-                                        return const Text('');
-                                      },
-                                    ),
-                                  ),
-                                  topTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                  rightTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                ),
-                                borderData: FlBorderData(show: false),
-                                gridData: const FlGridData(show: false),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
     );
   }
 
@@ -288,11 +285,7 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
               const SizedBox(height: 4),
               Text(
                 '\$${amount.toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
               ),
             ],
           ),
@@ -313,6 +306,25 @@ class _CashFlowScreenState extends State<CashFlowScreen> {
           Text(
             '${diff >= 0 ? '+' : ''}\$${diff.toStringAsFixed(2)}',
             style: TextStyle(fontWeight: FontWeight.bold, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error, size: 48, color: Colors.red),
+          const SizedBox(height: 8),
+          Text(_error!, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar'),
           ),
         ],
       ),
