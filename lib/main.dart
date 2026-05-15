@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'screens/activation_screen.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_scope.dart';
 import 'services/alert_service.dart';
 
 void main() {
@@ -35,20 +36,24 @@ class _MipymeWindowsAppState extends State<MipymeWindowsApp> {
     }
   }
 
-  void changeTheme(bool isDark) {
+  void _changeTheme(bool isDark) {
     setState(() => _themeMode = isDark ? ThemeMode.dark : ThemeMode.light);
     _storage.write(key: 'dark_mode', value: isDark.toString());
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'MIPYME Windows',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+    return ThemeScope(
+      onThemeChanged: _changeTheme,
       themeMode: _themeMode,
-      home: ActivationScreen(onThemeChanged: changeTheme),
+      child: MaterialApp(
+        title: 'MIPYME Windows',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: _themeMode,
+        home: const ActivationScreen(),
+      ),
     );
   }
 }
