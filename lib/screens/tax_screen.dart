@@ -6,6 +6,7 @@ import '../services/database_service.dart';
 
 class TaxScreen extends StatefulWidget {
   const TaxScreen({super.key});
+
   @override
   State<TaxScreen> createState() => _TaxScreenState();
 }
