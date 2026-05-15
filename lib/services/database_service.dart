@@ -29,7 +29,7 @@ class DatabaseService {
     return await databaseFactoryFfi.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 7,
+        version: 8,
         onCreate: (db, version) async {
           await _createTables(db);
         },
@@ -106,6 +106,17 @@ class DatabaseService {
                 cost REAL,
                 stock REAL NOT NULL,
                 unit TEXT NOT NULL
+              )
+            ''');
+          }
+          if (oldVersion < 8) {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                user TEXT,
+                action TEXT NOT NULL,
+                details TEXT
               )
             ''');
           }
@@ -214,6 +225,16 @@ class DatabaseService {
         cost REAL,
         stock REAL NOT NULL,
         unit TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        user TEXT,
+        action TEXT NOT NULL,
+        details TEXT
       )
     ''');
   }
@@ -418,5 +439,39 @@ class DatabaseService {
   static Future<List<Map<String, dynamic>>> getProducts() async {
     final db = await database;
     return await db.query('products', orderBy: 'name');
+  }
+
+  // ==================== AUDIT LOGS ====================
+  static Future<void> addAuditLog({
+    required String action,
+    String? user,
+    String? details,
+  }) async {
+    final db = await database;
+    await db.insert('audit_logs', {
+      'timestamp': DateTime.now().toIso8601String(),
+      'user': user ?? 'Sistema',
+      'action': action,
+      'details': details,
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getAuditLogs({
+    String? startDate,
+    String? endDate,
+    String? actionFilter,
+  }) async {
+    final db = await database;
+    String where = '1=1';
+    List<dynamic> args = [];
+    if (startDate != null && endDate != null) {
+      where += ' AND timestamp BETWEEN ? AND ?';
+      args.addAll([startDate, endDate]);
+    }
+    if (actionFilter != null) {
+      where += ' AND action LIKE ?';
+      args.add('%$actionFilter%');
+    }
+    return await db.query('audit_logs', where: where, whereArgs: args, orderBy: 'timestamp DESC');
   }
 }
