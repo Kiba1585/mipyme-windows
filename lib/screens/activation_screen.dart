@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/license_service.dart';
+import '../services/audit_service.dart';
 import 'dashboard_screen.dart';
 import 'setup_wizard.dart';
 
@@ -57,6 +58,8 @@ class _ActivationScreenState extends State<ActivationScreen> {
       final info = LicenseService.validateActivationCode(code);
       if (info != null) {
         await LicenseService.saveActivation(code);
+        await AuditService.log('Licencia activada', user: info.ownerName);
+
         if (!mounted) return;
 
         const storage = FlutterSecureStorage();
