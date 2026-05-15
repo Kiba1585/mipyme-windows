@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../services/license_service.dart';
 import '../services/database_service.dart';
 import '../services/export_excel_service.dart';
+import '../services/scheduled_backup_service.dart';
 import '../models/license_info.dart';
 import 'activation_screen.dart';
 import 'import_screen.dart';
@@ -22,6 +23,7 @@ import 'assets_screen.dart';
 import 'bulk_inventory_screen.dart';
 import 'settings_screen.dart';
 import 'analytics_screen.dart';
+import 'audit_log_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -46,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _loadData();
+    ScheduledBackupService.startIfEnabled();
   }
 
   Future<void> _loadData() async {
@@ -149,6 +152,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return const SyncScreen();
       case 14:
         return const SettingsScreen();
+      case 15:
+        return const AuditLogScreen();
       default:
         return _buildDashboardContent();
     }
@@ -190,6 +195,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               NavigationRailDestination(icon: Icon(Icons.analytics), label: Text('Analítica')),
               NavigationRailDestination(icon: Icon(Icons.sync), label: Text('Sincr.')),
               NavigationRailDestination(icon: Icon(Icons.settings), label: Text('Config.')),
+              NavigationRailDestination(icon: Icon(Icons.security), label: Text('Auditoría')),
             ],
           ),
           const VerticalDivider(thickness: 1, width: 1),
