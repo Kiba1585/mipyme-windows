@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:crypto/crypto.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import '../services/license_service.dart';
 import '../services/database_service.dart';
 
@@ -26,21 +29,37 @@ class DataImportService {
     final decrypted = _decryptData(encryptedContent, secretKey);
     final data = jsonDecode(decrypted) as Map<String, dynamic>;
 
-    // Procesar productos si están presentes
     if (data.containsKey('products')) {
       final products = (data['products'] as List).cast<Map<String, dynamic>>();
       await DatabaseService.insertProducts(products);
     }
-    // Aquí puedes añadir más tipos de datos en el futuro
+
+    // Guardar localmente para uso futuro
+    await saveLocalData(data);
 
     return data;
   }
 
+  static Future<void> saveLocalData(Map<String, dynamic> data) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final localFile = File(p.join(dir.path, 'mipyme_data.json'));
+    await localFile.writeAsString(jsonEncode(data));
+  }
+
+  static Future<Map<String, dynamic>?> loadLocalData() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final localFile = File(p.join(dir.path, 'mipyme_data.json'));
+    if (!await localFile.exists()) return null;
+    final content = await localFile.readAsString();
+    try {
+      return jsonDecode(content) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static enc.Key _deriveKey(String owner, String deviceId, String expiry) {
-    final hash = sha256
-        .convert(utf8.encode('$owner$deviceId$expiry'))
-        .toString()
-        .substring(0, 32);
+    final hash = sha256.convert(utf8.encode('$owner$deviceId$expiry')).toString().substring(0, 32);
     return enc.Key.fromUtf8(hash);
   }
 
