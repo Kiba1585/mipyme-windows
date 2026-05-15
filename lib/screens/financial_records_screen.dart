@@ -18,6 +18,7 @@ class _FinancialRecordsScreenState extends State<FinancialRecordsScreen> {
   String _category = 'General';
   List<Map<String, dynamic>> _records = [];
   bool _loading = true;
+  String? _error;
   final _categories = ['General', 'Transporte', 'Trabajadores', 'Local', 'Insumos', 'Impuesto'];
 
   @override
@@ -27,9 +28,17 @@ class _FinancialRecordsScreenState extends State<FinancialRecordsScreen> {
   }
 
   Future<void> _loadRecords() async {
-    setState(() => _loading = true);
-    _records = await DatabaseService.getFinancialRecords();
-    setState(() => _loading = false);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      _records = await DatabaseService.getFinancialRecords();
+    } catch (e) {
+      _error = 'Error al cargar registros.\n$e';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _addRecord() async {
@@ -123,22 +132,43 @@ class _FinancialRecordsScreenState extends State<FinancialRecordsScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _records.isEmpty
-                    ? const Center(child: Text('Sin registros'))
-                    : ListView.builder(
-                        itemCount: _records.length,
-                        itemBuilder: (_, i) {
-                          final r = _records[i];
-                          return ListTile(
-                            title: Text('${r['category']} - \$${(r['amount'] as num).toStringAsFixed(2)}'),
-                            subtitle: Text('${r['date']} · ${r['type']}'),
-                            trailing: Icon(
-                              r['type'] == 'income' ? Icons.arrow_upward : Icons.arrow_downward,
-                              color: r['type'] == 'income' ? Colors.green : Colors.red,
-                            ),
-                          );
-                        },
-                      ),
+                : _error != null
+                    ? _buildError()
+                    : _records.isEmpty
+                        ? const Center(child: Text('Sin registros'))
+                        : ListView.builder(
+                            itemCount: _records.length,
+                            itemBuilder: (_, i) {
+                              final r = _records[i];
+                              return ListTile(
+                                title: Text('${r['category']} - \$${(r['amount'] as num).toStringAsFixed(2)}'),
+                                subtitle: Text('${r['date']} · ${r['type']}'),
+                                trailing: Icon(
+                                  r['type'] == 'income' ? Icons.arrow_upward : Icons.arrow_downward,
+                                  color: r['type'] == 'income' ? Colors.green : Colors.red,
+                                ),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error, size: 48, color: Colors.red),
+          const SizedBox(height: 8),
+          Text(_error!, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _loadRecords,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar'),
           ),
         ],
       ),
