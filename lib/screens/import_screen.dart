@@ -60,19 +60,6 @@ class _ImportScreenState extends State<ImportScreen> {
                 color: _data != null ? Colors.green.shade50 : Colors.orange.shade50,
                 child: Text(_status!),
               ),
-            if (_data != null) ...[
-              const SizedBox(height: 24),
-              const Text('Vista previa de los datos importados:'),
-              const SizedBox(height: 8),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Text(
-                    _data.toString(),
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
