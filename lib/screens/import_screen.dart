@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/data_import_service.dart';
+import '../services/audit_service.dart';
 import '../core/theme/theme_scope.dart';
 
 class ImportScreen extends StatefulWidget {
@@ -30,12 +31,12 @@ class _ImportScreenState extends State<ImportScreen> {
     }
 
     await DataImportService.saveLocalData(data);
+    await AuditService.log('Datos importados desde .mipyme', details: 'Archivo importado correctamente');
 
     // Sincronizar tema si viene en los datos
     if (data.containsKey('theme_preference')) {
       final isDark = data['theme_preference'] == 'dark';
       ThemeScope.of(context)?.onThemeChanged(isDark);
-      // También podrías guardar en storage, pero ThemeScope ya lo hace internamente
     }
 
     setState(() {
