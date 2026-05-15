@@ -43,7 +43,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
     });
 
     try {
-      // Validar el código
       final info = LicenseService.validateActivationCode(code);
       if (info != null) {
         await LicenseService.saveActivation(code);
@@ -60,6 +59,12 @@ class _ActivationScreenState extends State<ActivationScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
   }
 
   @override
