@@ -14,6 +14,7 @@ class _PredictionsScreenState extends State<PredictionsScreen> {
   MonthlySummary? _prediction;
   double _trend = 0;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -22,17 +23,24 @@ class _PredictionsScreenState extends State<PredictionsScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _loading = true);
-    final history = await PredictionService.getMonthlyHistory();
-    final prediction = PredictionService.predictNextMonth(history);
-    final trend = PredictionService.calculateTrend(history);
-
     setState(() {
-      _history = history;
-      _prediction = prediction;
-      _trend = trend;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final history = await PredictionService.getMonthlyHistory();
+      final prediction = PredictionService.predictNextMonth(history);
+      final trend = PredictionService.calculateTrend(history);
+      setState(() {
+        _history = history;
+        _prediction = prediction;
+        _trend = trend;
+      });
+    } catch (e) {
+      _error = 'Error al cargar predicciones.\n$e';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -41,146 +49,140 @@ class _PredictionsScreenState extends State<PredictionsScreen> {
       appBar: AppBar(title: const Text('Predicciones y Tendencias')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Tarjeta de tendencia
-                  Card(
-                    color: _trend >= 0 ? Colors.green.shade50 : Colors.red.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _trend >= 0 ? Icons.trending_up : Icons.trending_down,
-                            size: 40,
-                            color: _trend >= 0 ? Colors.green : Colors.red,
+          : _error != null
+              ? _buildError()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Card(
+                        color: _trend >= 0 ? Colors.green.shade50 : Colors.red.shade50,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _trend >= 0 ? Icons.trending_up : Icons.trending_down,
+                                size: 40,
+                                color: _trend >= 0 ? Colors.green : Colors.red,
+                              ),
+                              const SizedBox(width: 16),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Tendencia (últimos 3 meses)',
+                                      style: TextStyle(fontWeight: FontWeight.bold)),
+                                  Text(
+                                    '\$${_trend.toStringAsFixed(2)} / mes',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: _trend >= 0 ? Colors.green : Colors.red,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 16),
-                          Column(
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Tendencia (últimos 3 meses)',
+                              const Text('Historial de ganancias (12 meses)',
                                   style: TextStyle(fontWeight: FontWeight.bold)),
-                              Text(
-                                '\$${_trend.toStringAsFixed(2)} / mes',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: _trend >= 0 ? Colors.green : Colors.red,
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                height: 250,
+                                child: BarChart(
+                                  BarChartData(
+                                    alignment: BarChartAlignment.spaceAround,
+                                    maxY: _getMaxProfit() * 1.2,
+                                    barGroups: _buildBarGroups(),
+                                    titlesData: FlTitlesData(
+                                      leftTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 42,
+                                          getTitlesWidget: (value, meta) => Text(
+                                            '\$${value.toInt()}',
+                                            style: const TextStyle(fontSize: 10),
+                                          ),
+                                        ),
+                                      ),
+                                      bottomTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          getTitlesWidget: (value, meta) {
+                                            final index = value.toInt();
+                                            if (index < _history.length) {
+                                              return Text(
+                                                _history[index].month.substring(5),
+                                                style: const TextStyle(fontSize: 10),
+                                              );
+                                            }
+                                            return const Text('');
+                                          },
+                                        ),
+                                      ),
+                                      topTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false)),
+                                      rightTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false)),
+                                    ),
+                                    borderData: FlBorderData(show: false),
+                                    gridData: const FlGridData(show: false),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Gráfico de historial mensual
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Historial de ganancias (12 meses)',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 250,
-                            child: BarChart(
-                              BarChartData(
-                                alignment: BarChartAlignment.spaceAround,
-                                maxY: _getMaxProfit() * 1.2,
-                                barGroups: _buildBarGroups(),
-                                titlesData: FlTitlesData(
-                                  leftTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      reservedSize: 42,
-                                      getTitlesWidget: (value, meta) => Text(
-                                        '\$${value.toInt()}',
-                                        style: const TextStyle(fontSize: 10),
-                                      ),
-                                    ),
-                                  ),
-                                  bottomTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      getTitlesWidget: (value, meta) {
-                                        final index = value.toInt();
-                                        if (index < _history.length) {
-                                          return Text(
-                                            _history[index].month.substring(5),
-                                            style: const TextStyle(fontSize: 10),
-                                          );
-                                        }
-                                        return const Text('');
-                                      },
-                                    ),
-                                  ),
-                                  topTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                  rightTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                ),
-                                borderData: FlBorderData(show: false),
-                                gridData: const FlGridData(show: false),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Predicción del próximo mes
-                  if (_prediction != null)
-                    Card(
-                      color: Colors.blue.shade50,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Predicción próximo mes',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _buildPredictionStat(
-                                    'Ingresos', _prediction!.income, Colors.green),
-                                _buildPredictionStat(
-                                    'Gastos', _prediction!.expenses, Colors.red),
-                                _buildPredictionStat(
-                                    'Ganancia', _prediction!.profit, Colors.blue),
-                              ],
-                            ),
-                          ],
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ),
+                      const SizedBox(height: 24),
+                      if (_prediction != null)
+                        Card(
+                          color: Colors.blue.shade50,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Predicción próximo mes',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold, fontSize: 16)),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    _buildPredictionStat(
+                                        'Ingresos', _prediction!.income, Colors.green),
+                                    _buildPredictionStat(
+                                        'Gastos', _prediction!.expenses, Colors.red),
+                                    _buildPredictionStat(
+                                        'Ganancia', _prediction!.profit, Colors.blue),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
     );
   }
 
   double _getMaxProfit() {
     if (_history.isEmpty) return 0;
-    return _history.fold(0.0, (max, s) =>
-        s.profit.abs() > max.abs() ? s.profit : max).abs();
+    return _history
+        .fold(0.0, (max, s) => s.profit.abs() > max.abs() ? s.profit : max)
+        .abs();
   }
 
   List<BarChartGroupData> _buildBarGroups() {
@@ -209,12 +211,28 @@ class _PredictionsScreenState extends State<PredictionsScreen> {
         const SizedBox(height: 4),
         Text(
           '\$${amount.toStringAsFixed(2)}',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, color: color),
         ),
       ],
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error, size: 48, color: Colors.red),
+          const SizedBox(height: 8),
+          Text(_error!, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar'),
+          ),
+        ],
+      ),
     );
   }
 }
