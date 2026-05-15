@@ -17,6 +17,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
   final _yearsCtrl = TextEditingController(text: '5');
   List<Asset> _assets = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -25,9 +26,17 @@ class _AssetsScreenState extends State<AssetsScreen> {
   }
 
   Future<void> _loadAssets() async {
-    setState(() => _loading = true);
-    _assets = await DatabaseService.getAssets();
-    setState(() => _loading = false);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      _assets = await DatabaseService.getAssets();
+    } catch (e) {
+      _error = 'No se pudieron cargar los activos.\n$e';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _addAsset() async {
@@ -45,11 +54,9 @@ class _AssetsScreenState extends State<AssetsScreen> {
     );
 
     await DatabaseService.addAsset(asset);
-
     _nameCtrl.clear();
     _valueCtrl.clear();
     _yearsCtrl.text = '5';
-
     _loadAssets();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -135,52 +142,69 @@ class _AssetsScreenState extends State<AssetsScreen> {
             const SizedBox(height: 12),
             _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _assets.isEmpty
-                    ? const Text('No hay activos registrados')
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _assets.length,
-                        itemBuilder: (_, i) {
-                          final asset = _assets[i];
-                          final monthsSinceAcquisition = DateTime.now()
-                                  .difference(asset.acquisitionDate)
-                                  .inDays ~/
-                              30;
-                          final accumulatedDepreciation =
-                              asset.monthlyDepreciation * monthsSinceAcquisition;
-                          final currentValue = asset.value - accumulatedDepreciation;
+                : _error != null
+                    ? _buildError()
+                    : _assets.isEmpty
+                        ? const Text('No hay activos registrados')
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _assets.length,
+                            itemBuilder: (_, i) {
+                              final asset = _assets[i];
+                              final monthsSinceAcquisition = DateTime.now()
+                                      .difference(asset.acquisitionDate)
+                                      .inDays ~/ 30;
+                              final accumulatedDepreciation =
+                                  asset.monthlyDepreciation * monthsSinceAcquisition;
+                              final currentValue = asset.value - accumulatedDepreciation;
 
-                          return Card(
-                            child: ListTile(
-                              title: Text(asset.name),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                      'Valor original: \$${asset.value.toStringAsFixed(2)}'),
-                                  Text(
-                                      'Depreciación mensual: \$${asset.monthlyDepreciation.toStringAsFixed(2)}'),
-                                  Text(
-                                      'Depreciación acumulada: \$${accumulatedDepreciation.toStringAsFixed(2)}'),
-                                  Text(
-                                    'Valor actual: \$${currentValue.toStringAsFixed(2)}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                              return Card(
+                                child: ListTile(
+                                  title: Text(asset.name),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Valor original: \$${asset.value.toStringAsFixed(2)}'),
+                                      Text('Depreciación mensual: \$${asset.monthlyDepreciation.toStringAsFixed(2)}'),
+                                      Text('Depreciación acumulada: \$${accumulatedDepreciation.toStringAsFixed(2)}'),
+                                      Text(
+                                        'Valor actual: \$${currentValue.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                      Text(
+                                          'Adquirido: ${DateFormat('dd/MM/yyyy').format(asset.acquisitionDate)}'),
+                                    ],
                                   ),
-                                  Text(
-                                      'Adquirido: ${DateFormat('dd/MM/yyyy').format(asset.acquisitionDate)}'),
-                                ],
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () => _deleteAsset(asset.id!),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    onPressed: () => _deleteAsset(asset.id!),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error, size: 48, color: Colors.red),
+          const SizedBox(height: 8),
+          Text(_error!, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _loadAssets,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar'),
+          ),
+        ],
       ),
     );
   }
