@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';                     // ← añadido
 import '../services/analytics_service.dart';
 
 class AnalyticsScreen extends StatefulWidget {
@@ -44,7 +45,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Gráfico de pastel – Gastos por categoría
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -76,7 +76,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          // Leyenda
                           Wrap(
                             spacing: 12,
                             runSpacing: 4,
@@ -99,8 +98,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // Gráfico de líneas – Tendencia ingresos vs gastos
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
