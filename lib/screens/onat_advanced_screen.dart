@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/onat_forms_service.dart';
 import '../services/reminder_service.dart';
+import '../services/calendar_service.dart';
+import '../services/database_service.dart';
 
 class OnatAdvancedScreen extends StatefulWidget {
   const OnatAdvancedScreen({super.key});
@@ -13,16 +15,30 @@ class OnatAdvancedScreen extends StatefulWidget {
 class _OnatAdvancedScreenState extends State<OnatAdvancedScreen> {
   DateTime _selectedDate = DateTime.now();
   Map<String, dynamic>? _upcomingDeadline;
+  double _taxAmount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadReminder();
+    _loadTaxAmount();
   }
 
   Future<void> _loadReminder() async {
     final deadline = await ReminderService.getUpcomingDeadline();
     setState(() => _upcomingDeadline = deadline);
+  }
+
+  Future<void> _loadTaxAmount() async {
+    final period = DateFormat('yyyy-MM').format(_selectedDate);
+    final startDate = '$period-01';
+    final endDate = '$period-31';
+    final income = await DatabaseService.getTotalByType('income', startDate, endDate);
+    final expenses = await DatabaseService.getTotalByType('expense', startDate, endDate);
+    final netIncome = income - expenses;
+    setState(() {
+      _taxAmount = netIncome > 0 ? netIncome * 0.05 : 0;
+    });
   }
 
   Future<void> _setReminder() async {
@@ -96,6 +112,24 @@ class _OnatAdvancedScreenState extends State<OnatAdvancedScreen> {
             const SizedBox(height: 12),
             _buildFormButton('DJ-02 - Declaración de Empleadores', Icons.people, () {
               OnatFormsService.generateDj02(period);
+            }),
+
+            const SizedBox(height: 32),
+            const Text('Calendario',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            _buildFormButton('Agregar vencimiento al Calendario de Windows', Icons.calendar_today, () async {
+              final dueDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 20);
+              await CalendarService.addTaxDeadlineToCalendar(
+                period: period,
+                dueDate: dueDate,
+                taxAmount: _taxAmount,
+              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Archivo de calendario generado. Ábralo para agregar el evento.')),
+                );
+              }
             }),
           ],
         ),
