@@ -16,6 +16,7 @@ class _OnatDeclarationScreenState extends State<OnatDeclarationScreen> {
   double _grossIncome = 0;
   double _totalExpenses = 0;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -24,13 +25,21 @@ class _OnatDeclarationScreenState extends State<OnatDeclarationScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _loading = true);
-    final period = _monthFormat.format(_selectedDate);
-    final startDate = '$period-01';
-    final endDate = '$period-31';
-    _grossIncome = await DatabaseService.getTotalByType('income', startDate, endDate);
-    _totalExpenses = await DatabaseService.getTotalByType('expense', startDate, endDate);
-    setState(() => _loading = false);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final period = _monthFormat.format(_selectedDate);
+      final startDate = '$period-01';
+      final endDate = '$period-31';
+      _grossIncome = await DatabaseService.getTotalByType('income', startDate, endDate);
+      _totalExpenses = await DatabaseService.getTotalByType('expense', startDate, endDate);
+    } catch (e) {
+      _error = 'Error al cargar declaración.\n$e';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _pickMonth() async {
@@ -60,46 +69,67 @@ class _OnatDeclarationScreenState extends State<OnatDeclarationScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Período: $period',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 24),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Ingresos Brutos: \$${_grossIncome.toStringAsFixed(2)}'),
-                          Text('Gastos Deducibles: \$${_totalExpenses.toStringAsFixed(2)}'),
-                          const Divider(),
-                          Text('Ingreso Neto: \$${netIncome.toStringAsFixed(2)}'),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Impuesto a Pagar (est.): \$${(netIncome > 0 ? netIncome * 0.05 : 0).toStringAsFixed(2)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+          : _error != null
+              ? _buildError()
+              : Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Período: $period',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 24),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Ingresos Brutos: \$${_grossIncome.toStringAsFixed(2)}'),
+                              Text('Gastos Deducibles: \$${_totalExpenses.toStringAsFixed(2)}'),
+                              const Divider(),
+                              Text('Ingreso Neto: \$${netIncome.toStringAsFixed(2)}'),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Impuesto a Pagar (est.): \$${(netIncome > 0 ? netIncome * 0.05 : 0).toStringAsFixed(2)}',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                      const Spacer(),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: () => OnatAdvancedService.generateDj01(period),
+                          icon: const Icon(Icons.picture_as_pdf),
+                          label: const Text('Exportar Declaración (PDF)'),
+                        ),
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: () => OnatAdvancedService.generateDj01(period),
-                      icon: const Icon(Icons.picture_as_pdf),
-                      label: const Text('Exportar Declaración (PDF)'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error, size: 48, color: Colors.red),
+          const SizedBox(height: 8),
+          Text(_error!, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar'),
+          ),
+        ],
+      ),
     );
   }
 }
