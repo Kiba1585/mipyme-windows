@@ -20,6 +20,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
   double _realIncome = 0;
   double _realExpenses = 0;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -28,24 +29,31 @@ class _BudgetScreenState extends State<BudgetScreen> {
   }
 
   Future<void> _loadBudget() async {
-    setState(() => _loading = true);
-    final month = _monthFormat.format(_selectedDate);
-    _budget = await DatabaseService.getBudget(month);
-    if (_budget != null) {
-      _incomeCtrl.text = _budget!.projectedIncome.toString();
-      _expensesCtrl.text = _budget!.projectedExpenses.toString();
-      _notesCtrl.text = _budget!.notes ?? '';
-    } else {
-      _incomeCtrl.clear();
-      _expensesCtrl.clear();
-      _notesCtrl.clear();
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final month = _monthFormat.format(_selectedDate);
+      _budget = await DatabaseService.getBudget(month);
+      if (_budget != null) {
+        _incomeCtrl.text = _budget!.projectedIncome.toString();
+        _expensesCtrl.text = _budget!.projectedExpenses.toString();
+        _notesCtrl.text = _budget!.notes ?? '';
+      } else {
+        _incomeCtrl.clear();
+        _expensesCtrl.clear();
+        _notesCtrl.clear();
+      }
+      final startDate = '$month-01';
+      final endDate = '$month-31';
+      _realIncome = await DatabaseService.getTotalByType('income', startDate, endDate);
+      _realExpenses = await DatabaseService.getTotalByType('expense', startDate, endDate);
+    } catch (e) {
+      _error = 'Error al cargar presupuesto.\n$e';
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    // Datos reales del mes
-    final startDate = '$month-01';
-    final endDate = '$month-31';
-    _realIncome = await DatabaseService.getTotalByType('income', startDate, endDate);
-    _realExpenses = await DatabaseService.getTotalByType('expense', startDate, endDate);
-    setState(() => _loading = false);
   }
 
   Future<void> _saveBudget() async {
@@ -96,71 +104,73 @@ class _BudgetScreenState extends State<BudgetScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Mes: $month',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _incomeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Ingresos proyectados',
-                      border: OutlineInputBorder(),
-                      prefixText: '\$ ',
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _expensesCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Gastos proyectados',
-                      border: OutlineInputBorder(),
-                      prefixText: '\$ ',
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _notesCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Notas',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: _saveBudget,
-                      icon: const Icon(Icons.save),
-                      label: const Text('Guardar presupuesto'),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  const Text('Comparativa con la realidad',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          _buildCompareRow('Ingresos', _budget?.projectedIncome ?? 0, _realIncome),
-                          _buildCompareRow('Gastos', _budget?.projectedExpenses ?? 0, _realExpenses),
-                          const Divider(),
-                          _buildCompareRow('Neto', netProjected, netReal),
-                        ],
+          : _error != null
+              ? _buildError()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Mes: $month',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _incomeCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Ingresos proyectados',
+                          border: OutlineInputBorder(),
+                          prefixText: '\$ ',
+                        ),
+                        keyboardType: TextInputType.number,
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _expensesCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Gastos proyectados',
+                          border: OutlineInputBorder(),
+                          prefixText: '\$ ',
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _notesCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Notas',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _saveBudget,
+                          icon: const Icon(Icons.save),
+                          label: const Text('Guardar presupuesto'),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      const Text('Comparativa con la realidad',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              _buildCompareRow('Ingresos', _budget?.projectedIncome ?? 0, _realIncome),
+                              _buildCompareRow('Gastos', _budget?.projectedExpenses ?? 0, _realExpenses),
+                              const Divider(),
+                              _buildCompareRow('Neto', netProjected, netReal),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
     );
   }
 
@@ -180,6 +190,25 @@ class _BudgetScreenState extends State<BudgetScreen> {
               '${diff >= 0 ? '+' : ''}\$${diff.toStringAsFixed(2)}',
               style: TextStyle(color: color, fontWeight: FontWeight.bold),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error, size: 48, color: Colors.red),
+          const SizedBox(height: 8),
+          Text(_error!, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _loadBudget,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar'),
           ),
         ],
       ),
