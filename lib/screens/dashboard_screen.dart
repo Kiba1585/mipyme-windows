@@ -44,7 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _upcomingTaxDeadlines = 0;
   int _totalEmployees = 0;
 
-  // --- Secciones de la barra lateral (mismo orden que el índice) ---
+  // Secciones agrupadas
   final List<_NavGroup> _navGroups = [
     _NavGroup('Principal', [
       _NavItem(Icons.dashboard, 'Inicio'),
@@ -72,24 +72,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ]),
   ];
 
-  // Mapa plano de índice -> screen builder
-  late final Map<int, WidgetBuilder> _pages = {
-    0: (_) => _buildDashboardContent(),
-    1: (_) => const BulkInventoryScreen(),
-    2: (_) => const ImportScreen(),
-    3: (_) => const ReportsScreen(),
-    4: (_) => const TaxScreen(),
-    5: (_) => const OnatAdvancedScreen(),
-    6: (_) => const FinancialRecordsScreen(),
-    7: (_) => const BudgetScreen(),
-    8: (_) => const PredictionsScreen(),
-    9: (_) => const AnalyticsScreen(),
-    10: (_) => const PayrollScreen(),
-    11: (_) => const AssetsScreen(),
-    12: (_) => const SuppliersScreen(),
-    13: (_) => const SyncScreen(),
-    14: (_) => const SettingsScreen(),
-    15: (_) => const AuditLogScreen(),
+  // Mapa de pantallas
+  late final Map<int, Widget Function()> _pages = {
+    0: () => _buildDashboardContent(),
+    1: () => const BulkInventoryScreen(),
+    2: () => const ImportScreen(),
+    3: () => const ReportsScreen(),
+    4: () => const TaxScreen(),
+    5: () => const OnatAdvancedScreen(),
+    6: () => const FinancialRecordsScreen(),
+    7: () => const BudgetScreen(),
+    8: () => const PredictionsScreen(),
+    9: () => const AnalyticsScreen(),
+    10: () => const PayrollScreen(),
+    11: () => const AssetsScreen(),
+    12: () => const SuppliersScreen(),
+    13: () => const SyncScreen(),
+    14: () => const SettingsScreen(),
+    15: () => const AuditLogScreen(),
   };
 
   int _flatIndex(int groupIdx, int itemIdx) {
@@ -188,11 +188,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: Row(
         children: [
-          // --- Barra lateral con secciones ---
+          // Barra lateral agrupada
           SizedBox(
             width: 220,
             child: Container(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: Theme.of(context).colorScheme.surface, // ← compatible
               child: Column(
                 children: [
                   const Padding(
@@ -243,16 +243,204 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : (_pages[_selectedIndex] ?? (_) => const SizedBox())(context),
+                : _pages[_selectedIndex]?.call() ?? const SizedBox.shrink(), // ← nunca null
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDashboardContent() { /* ... exactamente igual que antes ... */ }
-  // (El resto del código del dashboard no se modifica, por brevedad lo omito)
-  // Debes conservar los métodos _buildKpiCard, _buildButton y el contenido del panel.
+  Widget _buildDashboardContent() {
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(_errorMessage!, textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            ElevatedButton(onPressed: _refreshData, child: const Text('Reintentar')),
+          ],
+        ),
+      );
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Bienvenido, ${_license?.ownerName ?? "Usuario"}',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text('Plan: ${_license?.planType ?? "N/A"}'),
+                  if (_license != null)
+                    Text('Vence: ${_license!.expiryDate.toLocal().toString().substring(0, 10)}'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _buildKpiCard('Ingresos del mes', '\$${_totalIncome.toStringAsFixed(0)}', Icons.arrow_upward, Colors.green),
+              const SizedBox(width: 12),
+              _buildKpiCard('Gastos del mes', '\$${_totalExpenses.toStringAsFixed(0)}', Icons.arrow_downward, Colors.red),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildKpiCard('Ganancia neta', '\$${(_totalIncome - _totalExpenses).toStringAsFixed(0)}',
+                  Icons.account_balance_wallet, Colors.blue),
+              const SizedBox(width: 12),
+              _buildKpiCard('Empleados', '$_totalEmployees', Icons.people, Colors.orange),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildKpiCard(
+                _upcomingTaxDeadlines > 0 ? '¡Vencimientos!' : 'Próx. vencimientos',
+                _upcomingTaxDeadlines > 0 ? '$_upcomingTaxDeadlines' : '0',
+                _upcomingTaxDeadlines > 0 ? Icons.notification_important : Icons.notifications_none,
+                _upcomingTaxDeadlines > 0 ? Colors.red : Colors.grey,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(child: SizedBox.shrink()),
+            ],
+          ),
+          const SizedBox(height: 24),
+          if (_chartData != null && (_chartData!['spots'] as List).isNotEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Ingresos (últimos 7 días)', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 220,
+                      child: BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          maxY: (_chartData!['spots'] as List<FlSpot>)
+                                  .fold(0.0, (max, s) => s.y > max ? s.y : max) *
+                              1.2,
+                          barGroups: (_chartData!['spots'] as List<FlSpot>)
+                              .map((spot) => BarChartGroupData(
+                                    x: spot.x.toInt(),
+                                    barRods: [
+                                      BarChartRodData(
+                                        toY: spot.y,
+                                        color: Colors.blue,
+                                        width: 22,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ],
+                                  ))
+                              .toList(),
+                          titlesData: FlTitlesData(
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 42,
+                                getTitlesWidget: (value, meta) =>
+                                    Text('\$${value.toInt()}', style: const TextStyle(fontSize: 10)),
+                              ),
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (value, meta) {
+                                  final date = DateTime.now().subtract(Duration(days: 6 - value.toInt()));
+                                  return Text(DateFormat('dd/MM').format(date),
+                                      style: const TextStyle(fontSize: 10));
+                                },
+                              ),
+                            ),
+                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          gridData: const FlGridData(show: false),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 24),
+          const Text('Acciones rápidas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 16),
+          _buildButton(Icons.upload_file, 'Importar datos (.mipyme)', () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportScreen()))),
+          const SizedBox(height: 12),
+          _buildButton(Icons.inventory, 'Carga masiva de inventario', () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const BulkInventoryScreen()))),
+          const SizedBox(height: 12),
+          _buildButton(Icons.bar_chart, 'Reportes financieros', () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen()))),
+          const SizedBox(height: 12),
+          _buildButton(Icons.table_chart, 'Exportar a Excel', () async {
+            try {
+              final path = await ExportExcelService.exportFinancialRecordsToExcel();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Excel exportado a: $path')),
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e')),
+                );
+              }
+            }
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKpiCard(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 32),
+              const SizedBox(height: 8),
+              Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+              const SizedBox(height: 4),
+              Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildButton(IconData icon, String label, VoidCallback onPressed) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+      ),
+    );
+  }
 }
 
 class _NavGroup {
