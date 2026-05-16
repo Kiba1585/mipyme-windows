@@ -3,6 +3,9 @@ name: Compilar MIPYME Windows
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write   # Para crear/actualizar releases
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -52,9 +55,15 @@ jobs:
         run: |
           Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath mipyme-windows.zip
 
-      - name: Subir ZIP como artefacto
-        uses: actions/upload-artifact@v4
+      # ---------- CAMBIO PRINCIPAL ----------
+      # Se sube el ZIP a una Release (no como artefacto)
+      - name: Subir ZIP a Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: mipyme-windows
-          path: mipyme-windows.zip
-          retention-days: 3
+          tag_name: windows-latest
+          name: "MIPYME Windows - Última versión"
+          body: "Ejecutable comprimido generado automáticamente (build #${{ github.run_number }})"
+          files: mipyme-windows.zip
+          overwrite: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
