@@ -85,12 +85,13 @@ class IntelligenceService {
   static Future<SalesTrend> getSalesTrend() async {
     final summaries = await PredictionService.getMonthlyHistory();
     if (summaries.length < 2) {
-      return SalesTrend(direction: 'estable', changePercent: 0, suggestion: 'No hay suficientes datos');
+      return SalesTrend(direction: 'estable', changePercent: 0.0, suggestion: 'No hay suficientes datos');
     }
 
     final last = summaries.last.profit;
     final previous = summaries[summaries.length - 2].profit;
-    final change = previous != 0 ? ((last - previous) / previous.abs()) * 100 : 0;
+    // Corregido: 0.0 para que el tipo sea double, no num
+    final change = previous != 0 ? ((last - previous) / previous.abs()) * 100 : 0.0;
 
     String direction;
     String suggestion;
@@ -150,7 +151,6 @@ class IntelligenceService {
     // Gastos elevados por categoría
     final expenses = await AnalyticsService.getExpensesByCategory();
     for (final cat in expenses) {
-      // cat.amount es double, pero nos aseguramos
       final amount = (cat.amount as num).toDouble();
       if (amount > 10000) {
         alerts.add(SmartAlert(
