@@ -4,12 +4,13 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-// Ya NO necesitamos importar sqlite3 porque sqlite3_flutter_libs se encarga
 import 'screens/activation_screen.dart';
+import 'screens/dashboard_screen.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_scope.dart';
 import 'services/alert_service.dart';
 import 'services/scheduled_backup_service.dart';
+import 'services/license_service.dart';
 
 void guardarYMostrarError(String title, String message) {
   try {
@@ -35,7 +36,7 @@ void main() {
   try {
     WidgetsFlutterBinding.ensureInitialized();
 
-    sqfliteFfiInit();                  // sqlite3_flutter_libs provee la DLL
+    sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
 
     AlertService.initialize();
@@ -92,8 +93,45 @@ class _MipymeWindowsAppState extends State<MipymeWindowsApp> {
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: _themeMode,
-        home: const ActivationScreen(),
+        home: const StartupScreen(),
       ),
     );
+  }
+}
+
+/// Pantalla que decide a dónde ir según si ya hay dueños guardados
+class StartupScreen extends StatefulWidget {
+  const StartupScreen({super.key});
+
+  @override
+  State<StartupScreen> createState() => _StartupScreenState();
+}
+
+class _StartupScreenState extends State<StartupScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _checkLicense();
+  }
+
+  Future<void> _checkLicense() async {
+    final activated = await LicenseService.isActivated();
+    if (!mounted) return;
+    if (activated) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ActivationScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
