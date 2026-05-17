@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../services/database_service.dart';
 import '../services/inventory_export_service.dart';
 
 class BulkInventoryScreen extends StatefulWidget {
@@ -11,51 +12,65 @@ class BulkInventoryScreen extends StatefulWidget {
 
 class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
   final _formKey = GlobalKey<FormState>();
-  final List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _products = [];
   final _codeCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _categoryCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _costCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
-  final _unitCtrl = TextEditingController(text: 'unidad');
+  final _unitCtrl = TextEditingController(text: '');   // ← vacío por defecto
+  bool _loading = true;
 
   @override
-  void dispose() {
-    _codeCtrl.dispose();
-    _nameCtrl.dispose();
-    _categoryCtrl.dispose();
-    _priceCtrl.dispose();
-    _costCtrl.dispose();
-    _stockCtrl.dispose();
-    _unitCtrl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _loadProducts();
   }
 
-  void _addProduct() {
+  Future<void> _loadProducts() async {
+    try {
+      final products = await DatabaseService.getProducts();
+      setState(() => _products = products);
+    } catch (_) {
+      _products = [];
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  void _addProduct() async {
     if (!_formKey.currentState!.validate()) return;
-    _products.add({
-      'product_code': _codeCtrl.text.trim(),
-      'name': _nameCtrl.text.trim(),
-      'category': _categoryCtrl.text.trim(),
-      'price': double.parse(_priceCtrl.text.trim()),
-      'cost': _costCtrl.text.isEmpty ? null : double.parse(_costCtrl.text.trim()),
-      'stock': double.parse(_stockCtrl.text.trim()),
-      'unit': _unitCtrl.text.trim(),
-    });
+
+    final code = _codeCtrl.text.trim();
+    final name = _nameCtrl.text.trim();
+    final category = _categoryCtrl.text.trim();
+    final price = double.tryParse(_priceCtrl.text.trim()) ?? 0;
+    final cost = _costCtrl.text.isNotEmpty ? double.tryParse(_costCtrl.text.trim()) : null;
+    final stock = double.tryParse(_stockCtrl.text.trim()) ?? 0;
+    final unit = _unitCtrl.text.trim();
+
+    await DatabaseService.upsertProduct(
+      productCode: code,
+      name: name,
+      category: category,
+      price: price,
+      cost: cost,
+      stock: stock,
+      unit: unit,
+    );
+
+    // Limpiar campos
     _codeCtrl.clear();
     _nameCtrl.clear();
     _categoryCtrl.clear();
     _priceCtrl.clear();
     _costCtrl.clear();
     _stockCtrl.clear();
-    _unitCtrl.text = 'unidad';
-    setState(() {});
-  }
+    _unitCtrl.clear();   // queda vacío
 
-  void _removeProduct(int index) {
-    _products.removeAt(index);
-    setState(() {});
+    // Recargar lista desde la base de datos
+    _loadProducts();
   }
 
   Future<void> _exportToMobile() async {
@@ -77,6 +92,18 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
         SnackBar(content: Text('Error: $e')),
       );
     }
+  }
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    _nameCtrl.dispose();
+    _categoryCtrl.dispose();
+    _priceCtrl.dispose();
+    _costCtrl.dispose();
+    _stockCtrl.dispose();
+    _unitCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -145,7 +172,7 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: _unitCtrl,
-                          decoration: const InputDecoration(labelText: 'Unidad', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(labelText: 'Unidad', border: OutlineInputBorder(), hintText: 'Ej. kg, litro'),
                         ),
                       ),
                     ],
@@ -165,24 +192,28 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
             ),
           ),
 
-          // Lista de productos agregados
+          // Lista de productos (desde la base de datos)
           Expanded(
-            child: _products.isEmpty
-                ? const Center(child: Text('No hay productos en la lista'))
-                : ListView.builder(
-                    itemCount: _products.length,
-                    itemBuilder: (_, i) {
-                      final product = _products[i];
-                      return ListTile(
-                        title: Text(product['name'] as String),
-                        subtitle: Text('Código: ${product['product_code']} | Stock: ${product['stock']} ${product['unit']}'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _removeProduct(i),
-                        ),
-                      );
-                    },
-                  ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _products.isEmpty
+                    ? const Center(child: Text('No hay productos en el inventario'))
+                    : ListView.builder(
+                        itemCount: _products.length,
+                        itemBuilder: (_, i) {
+                          final product = _products[i];
+                          return ListTile(
+                            title: Text(product['name'] as String),
+                            subtitle: Text('Código: ${product['product_code']} | Stock: ${product['stock']} ${product['unit']}'),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () async {
+                                // Podrías añadir una función de eliminar en DatabaseService si es necesario
+                              },
+                            ),
+                          );
+                        },
+                      ),
           ),
 
           // Botón exportar
