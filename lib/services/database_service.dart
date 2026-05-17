@@ -22,8 +22,7 @@ class DatabaseService {
   }
 
   static Future<Database> _initDatabase() async {
-    // La inicialización de sqfliteFfiInit y la asignación de databaseFactory
-    // se hacen en main.dart. Aquí solo se obtiene la ruta y se abre la DB.
+    // La inicialización de sqfliteFfiInit y databaseFactory se hace en main.dart
     final dir = await getApplicationDocumentsDirectory();
     final dbPath = p.join(dir.path, 'mipyme_windows.db');
     return await databaseFactoryFfi.openDatabase(
@@ -449,25 +448,30 @@ class DatabaseService {
     return maps.first;
   }
 
+  /// Inserta o actualiza un producto.
+  /// Si ya existe: stock se suma, precio y costo se promedian.
   static Future<void> upsertProduct({
     required String productCode,
     required String name,
     required String category,
     required double price,
     double? cost,
-    required double stock,
+    required double stock,       // cantidad a añadir
     required String unit,
   }) async {
     final db = await database;
     final existing = await getProductByCode(productCode);
 
     if (existing != null) {
-      final newStock = ((existing['stock'] as double) + stock) / 2;
+      // Precio y costo promedian
       final newPrice = ((existing['price'] as double) + price) / 2;
       final existingCost = existing['cost'] as double?;
       final newCost = (existingCost != null && cost != null)
           ? (existingCost + cost) / 2
           : cost ?? existingCost;
+
+      // Stock se suma (la cantidad nueva se añade a la existente)
+      final newStock = (existing['stock'] as double) + stock;
 
       await db.update(
         'products',
@@ -483,6 +487,7 @@ class DatabaseService {
         whereArgs: [productCode],
       );
     } else {
+      // Producto nuevo
       await db.insert('products', {
         'product_code': productCode,
         'name': name,
