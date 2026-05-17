@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';   // ← AÑADIDO
 import 'screens/activation_screen.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_scope.dart';
@@ -9,11 +10,9 @@ import 'services/scheduled_backup_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // Permitir arrastrar y soltar en toda la app (inicialización del plugin)
-  WidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();                // ← INICIALIZA FFI PARA WINDOWS
   AlertService.initialize();
   AlertService.startPeriodicCheck();
-  // El respaldo automático se inicia dentro del dashboard, porque requiere contexto de la app completamente iniciada.
   runApp(const MipymeWindowsApp());
 }
 
