@@ -24,7 +24,7 @@ import 'bulk_inventory_screen.dart';
 import 'settings_screen.dart';
 import 'analytics_screen.dart';
 import 'audit_log_screen.dart';
-import '../features/intelligence/presentation/intelligence_screen.dart'; // ← NUEVO
+import '../features/intelligence/presentation/intelligence_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -35,6 +35,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   LicenseInfo? _license;
+  List<LicenseInfo> _owners = [];
   Map<String, dynamic>? _chartData;
   bool _loading = true;
   String? _errorMessage;
@@ -45,7 +46,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _upcomingTaxDeadlines = 0;
   int _totalEmployees = 0;
 
-  // Secciones agrupadas
   final List<_NavGroup> _navGroups = [
     _NavGroup('Principal', [
       _NavItem(Icons.dashboard, 'Inicio'),
@@ -60,7 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _NavItem(Icons.account_balance_wallet, 'Presupuesto'),
       _NavItem(Icons.insights, 'Predicciones'),
       _NavItem(Icons.analytics, 'Analítica'),
-      _NavItem(Icons.lightbulb, 'Inteligencia'),   // ← NUEVO
+      _NavItem(Icons.lightbulb, 'Inteligencia'),
     ]),
     _NavGroup('Recursos', [
       _NavItem(Icons.people, 'Nóminas'),
@@ -74,7 +74,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ]),
   ];
 
-  // Mapa de pantallas (índices actualizados)
   late final Map<int, Widget Function()> _pages = {
     0: () => _buildDashboardContent(),
     1: () => const BulkInventoryScreen(),
@@ -86,7 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     7: () => const BudgetScreen(),
     8: () => const PredictionsScreen(),
     9: () => const AnalyticsScreen(),
-    10: () => const IntelligenceScreen(),   // ← NUEVA
+    10: () => const IntelligenceScreen(),
     11: () => const PayrollScreen(),
     12: () => const AssetsScreen(),
     13: () => const SuppliersScreen(),
@@ -106,8 +105,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadOwners();
     ScheduledBackupService.startIfEnabled();
+  }
+
+  Future<void> _loadOwners() async {
+    final owners = await LicenseService.getAllOwners();
+    final active = await LicenseService.getActiveOwner();
+    setState(() {
+      _owners = owners;
+      _license = active;
+    });
+    _loadData();
+  }
+
+  Future<void> _switchOwner(LicenseInfo newOwner) async {
+    final index = _owners.indexOf(newOwner);
+    await LicenseService.setActiveOwner(index);
+    setState(() => _license = newOwner);
+    _loadData();
+  }
+
+  Future<void> _addNewOwner() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const ActivationScreen()),
+    );
+    if (result == true) {
+      _loadOwners(); // recargar lista de dueños y dashboard
+    }
   }
 
   Future<void> _loadData() async {
@@ -115,7 +141,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _loading = true;
       _errorMessage = null;
     });
-
     try {
       await _doLoad().timeout(const Duration(seconds: 15));
     } catch (e) {
@@ -127,7 +152,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _doLoad() async {
     try {
-      _license = await LicenseService.getStoredInfo();
+      _license = await LicenseService.getActiveOwner();
     } catch (_) {
       if (mounted) {
         Navigator.pushReplacement(
@@ -171,22 +196,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _refreshData() async => _loadData();
 
-  void _logout() {
-    LicenseService.deactivate();
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const ActivationScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_license?.ownerName ?? 'MIPYME Windows'),
+        title: _owners.isEmpty
+            ? const Text('MIPYME Windows')
+            : DropdownButtonHideUnderline(
+                child: DropdownButton<LicenseInfo>(
+                  value: _license,
+                  isExpanded: false,
+                  items: _owners
+                      .map((o) => DropdownMenuItem<LicenseInfo>(
+                            value: o,
+                            child: Text(o.ownerName,
+                                style: const TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.bold)),
+                          ))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) _switchOwner(v);
+                  },
+                ),
+              ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person_add),
+            tooltip: 'Añadir dueño',
+            onPressed: _addNewOwner,
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData, tooltip: 'Actualizar'),
-          IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Cambiar de dueño'),
         ],
       ),
       body: Row(
@@ -231,12 +270,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       }).toList(),
                     ),
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.logout, color: Colors.red),
-                    title: const Text('Cambiar de dueño', style: TextStyle(color: Colors.red)),
-                    onTap: _logout,
-                  ),
                 ],
               ),
             ),
@@ -252,6 +285,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ... (resto del dashboard: _buildDashboardContent, _buildKpiCard, _buildButton) igual que antes
   Widget _buildDashboardContent() {
     if (_errorMessage != null) {
       return Center(
