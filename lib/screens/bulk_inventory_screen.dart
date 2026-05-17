@@ -19,10 +19,10 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
   final _priceCtrl = TextEditingController();
   final _costCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
-  final _unitCtrl = TextEditingController(text: ''); // vacío por defecto
+  final _unitCtrl = TextEditingController(text: '');
 
   bool _loading = true;
-  bool _verifying = false;          // para mostrar un indicador mientras se verifica
+  bool _verifying = false;
 
   @override
   void initState() {
@@ -41,7 +41,6 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
     }
   }
 
-  /// Busca el código en la base de datos y, si existe, rellena los campos
   Future<void> _verifyCode() async {
     final code = _codeCtrl.text.trim();
     if (code.isEmpty) {
@@ -60,7 +59,6 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
       _categoryCtrl.text = existing['category'] as String;
       _unitCtrl.text = existing['unit'] as String;
 
-      // Mostrar precio y costo existentes (pueden modificarse)
       _priceCtrl.text = (existing['price'] as num).toStringAsFixed(2);
       final existingCost = existing['cost'];
       if (existingCost != null) {
@@ -69,14 +67,12 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
         _costCtrl.clear();
       }
 
-      // Stock se deja vacío para que el usuario indique la cantidad a añadir
       _stockCtrl.clear();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Código existente. Campos rellenados. Modifique precio/costo si lo desea.')),
+        const SnackBar(content: Text('Código existente. Campos rellenados.')),
       );
     } else {
-      // Si no existe, limpiamos los campos (excepto código)
       _nameCtrl.clear();
       _categoryCtrl.clear();
       _priceCtrl.clear();
@@ -113,11 +109,10 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
       category: category,
       price: price,
       cost: cost,
-      stock: stock,        // esta cantidad se sumará al stock existente
+      stock: stock,
       unit: unit,
     );
 
-    // Limpiar todos los campos
     _codeCtrl.clear();
     _nameCtrl.clear();
     _categoryCtrl.clear();
@@ -126,6 +121,11 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
     _stockCtrl.clear();
     _unitCtrl.clear();
 
+    _loadProducts();
+  }
+
+  Future<void> _deleteProduct(int id) async {
+    await DatabaseService.deleteProduct(id);
     _loadProducts();
   }
 
@@ -168,14 +168,12 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
       appBar: AppBar(title: const Text('Carga masiva de inventario')),
       body: Column(
         children: [
-          // Formulario
           Padding(
             padding: const EdgeInsets.all(16),
             child: Form(
               key: _formKey,
               child: Column(
                 children: [
-                  // Código + botón Verificar
                   Row(
                     children: [
                       Expanded(
@@ -198,7 +196,6 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-
                   TextFormField(
                     controller: _nameCtrl,
                     decoration: const InputDecoration(labelText: 'Nombre', border: OutlineInputBorder()),
@@ -274,7 +271,6 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
             ),
           ),
 
-          // Lista de productos
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -287,12 +283,15 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
                           return ListTile(
                             title: Text(product['name'] as String),
                             subtitle: Text('Código: ${product['product_code']} | Stock: ${product['stock']} ${product['unit']}'),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteProduct(product['id'] as int),
+                            ),
                           );
                         },
                       ),
           ),
 
-          // Botón exportar
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(16),
