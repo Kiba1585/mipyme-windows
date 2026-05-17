@@ -22,8 +22,8 @@ class DatabaseService {
   }
 
   static Future<Database> _initDatabase() async {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    // La inicialización de sqfliteFfiInit y la asignación de databaseFactory
+    // se hacen en main.dart. Aquí solo se obtiene la ruta y se abre la DB.
     final dir = await getApplicationDocumentsDirectory();
     final dbPath = p.join(dir.path, 'mipyme_windows.db');
     return await databaseFactoryFfi.openDatabase(
@@ -441,7 +441,6 @@ class DatabaseService {
     return await db.query('products', orderBy: 'name');
   }
 
-  /// Busca un producto por su código exacto
   static Future<Map<String, dynamic>?> getProductByCode(String code) async {
     final db = await database;
     final maps = await db.query('products',
@@ -450,7 +449,6 @@ class DatabaseService {
     return maps.first;
   }
 
-  /// Inserta o actualiza un producto promediando cantidad, precio y costo si ya existe
   static Future<void> upsertProduct({
     required String productCode,
     required String name,
@@ -464,7 +462,6 @@ class DatabaseService {
     final existing = await getProductByCode(productCode);
 
     if (existing != null) {
-      // Promediar con los valores existentes
       final newStock = ((existing['stock'] as double) + stock) / 2;
       final newPrice = ((existing['price'] as double) + price) / 2;
       final existingCost = existing['cost'] as double?;
@@ -486,7 +483,6 @@ class DatabaseService {
         whereArgs: [productCode],
       );
     } else {
-      // Insertar nuevo producto
       await db.insert('products', {
         'product_code': productCode,
         'name': name,
