@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'package:ffi/ffi.dart';               // ← NECESARIO para Utf16, toNativeUtf16, free
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -9,10 +10,7 @@ import 'core/theme/theme_scope.dart';
 import 'services/alert_service.dart';
 import 'services/scheduled_backup_service.dart';
 
-// ========================================================
-// Función para mostrar un cuadro de error nativo de Windows
-// usando la API MessageBoxW de user32.dll
-// ========================================================
+/// Muestra un cuadro de error nativo de Windows (MessageBox)
 void showNativeError(String title, String message) {
   final user32 = DynamicLibrary.open('user32.dll');
   final MessageBoxW = user32.lookupFunction<
@@ -29,27 +27,20 @@ void showNativeError(String title, String message) {
 void main() {
   try {
     WidgetsFlutterBinding.ensureInitialized();
-
-    // Inicializar FFI de SQLite (obligatorio en Windows)
     sqfliteFfiInit();
-
-    // Servicios que deben correr antes de la UI
     AlertService.initialize();
     AlertService.startPeriodicCheck();
 
-    // Captura errores de Flutter en runtime (por si acaso)
     FlutterError.onError = (details) {
-      // Podrías usar un diálogo de Flutter, pero si la app ya está corriendo
-      // mostramos en consola y en un MessageBox solo para errores fatales
+      // Mostrar errores de Flutter en consola (y en MessageBox si prefieres)
       debugPrint(details.exceptionAsString());
     };
 
     runApp(const MipymeWindowsApp());
   } catch (e, stack) {
-    // Error fatal antes de que Flutter pueda abrirse
-    final errorMessage = 'Error: $e\n\nStack:\n$stack';
-    showNativeError('Error fatal', errorMessage);
-    exit(1); // Termina la app para que no quede colgada
+    final errorMsg = 'Error fatal: $e\n\nStack:\n$stack';
+    showNativeError('Error fatal', errorMsg);
+    exit(1);
   }
 }
 
