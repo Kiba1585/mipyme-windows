@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/license_service.dart';
-import '../services/audit_service.dart';
 import 'dashboard_screen.dart';
 import 'setup_wizard.dart';
 
@@ -20,25 +19,14 @@ class _ActivationScreenState extends State<ActivationScreen> {
   @override
   void initState() {
     super.initState();
+    // Si ya hay dueños y se puede volver (añadir dueño), volvemos sin hacer nada
     _checkIfAlreadyActivated();
   }
 
   Future<void> _checkIfAlreadyActivated() async {
     final activated = await LicenseService.isActivated();
-    if (activated && mounted) {
-      const storage = FlutterSecureStorage();
-      final wizardDone = await storage.read(key: 'setup_wizard_completed');
-      if (wizardDone == 'true') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const SetupWizard()),
-        );
-      }
+    if (activated && mounted && Navigator.canPop(context)) {
+      Navigator.pop(context, false); // ya hay dueños, no es necesario añadir
     }
   }
 
@@ -57,23 +45,28 @@ class _ActivationScreenState extends State<ActivationScreen> {
     try {
       final info = LicenseService.validateActivationCode(code);
       if (info != null) {
-        await LicenseService.saveActivation(code);
-        await AuditService.log('Licencia activada', user: info.ownerName);
+        await LicenseService.addLicense(info);
 
         if (!mounted) return;
 
-        const storage = FlutterSecureStorage();
-        final wizardDone = await storage.read(key: 'setup_wizard_completed');
-        if (wizardDone == 'true') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const DashboardScreen()),
-          );
+        // Si se puede volver (añadir dueño desde dashboard), volvemos con éxito
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context, true);
         } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const SetupWizard()),
-          );
+          // Primera activación: navegar al dashboard o wizard
+          const storage = FlutterSecureStorage();
+          final wizardDone = await storage.read(key: 'setup_wizard_completed');
+          if (wizardDone == 'true') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const DashboardScreen()),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const SetupWizard()),
+            );
+          }
         }
       } else {
         setState(() => _error = 'Código inválido o expirado');
@@ -94,7 +87,10 @@ class _ActivationScreenState extends State<ActivationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Activar MIPYME Windows')),
+      appBar: AppBar(
+        title: const Text('Activar MIPYME Windows'),
+        // El botón de retroceso aparece automáticamente si se navega con push
+      ),
       body: Padding(
         padding: const EdgeInsets.all(32.0),
         child: Column(
