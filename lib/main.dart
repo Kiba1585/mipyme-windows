@@ -1,6 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
-import 'package:ffi/ffi.dart';               // contiene malloc, Utf16, toNativeUtf16
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -10,17 +10,28 @@ import 'core/theme/theme_scope.dart';
 import 'services/alert_service.dart';
 import 'services/scheduled_backup_service.dart';
 
-/// Muestra un cuadro de error nativo de Windows (MessageBox)
-void showNativeError(String title, String message) {
+/// Guarda el error en un archivo y muestra un MessageBox indicando dónde
+void guardarYMostrarError(String title, String message) {
+  try {
+    // Obtener la carpeta donde está el ejecutable
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final logFile = File('$exeDir/error_log.txt');
+    logFile.writeAsStringSync(message);
+  } catch (_) {
+    // Si falla la escritura, al menos mostramos el error
+  }
+
+  // Mostrar el MessageBox con el mismo error y la ubicación
   final user32 = DynamicLibrary.open('user32.dll');
   final MessageBoxW = user32.lookupFunction<
       Int32 Function(IntPtr hWnd, Pointer<Utf16> lpText, Pointer<Utf16> lpCaption, Int32 uType),
       int Function(int hWnd, Pointer<Utf16> lpText, Pointer<Utf16> lpCaption, int uType)>('MessageBoxW');
 
-  final text = message.toNativeUtf16();
+  final msg = 'Error fatal (también guardado en error_log.txt):\n\n$message';
+  final text = msg.toNativeUtf16();
   final caption = title.toNativeUtf16();
   MessageBoxW(0, text, caption, 0x00000030); // MB_ICONERROR | MB_OK
-  malloc.free(text);    // liberar memoria
+  malloc.free(text);
   malloc.free(caption);
 }
 
@@ -37,8 +48,8 @@ void main() {
 
     runApp(const MipymeWindowsApp());
   } catch (e, stack) {
-    final errorMsg = 'Error fatal: $e\n\nStack:\n$stack';
-    showNativeError('Error fatal', errorMsg);
+    final errorMsg = 'Error: $e\n\nStack:\n$stack';
+    guardarYMostrarError('Error fatal', errorMsg);
     exit(1);
   }
 }
