@@ -4,33 +4,29 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;   // ← para obtener la ruta de la DLL
 import 'screens/activation_screen.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_scope.dart';
 import 'services/alert_service.dart';
 import 'services/scheduled_backup_service.dart';
 
-/// Guarda el error en un archivo y muestra un MessageBox indicando dónde
 void guardarYMostrarError(String title, String message) {
   try {
-    // Obtener la carpeta donde está el ejecutable
     final exeDir = File(Platform.resolvedExecutable).parent.path;
     final logFile = File('$exeDir/error_log.txt');
     logFile.writeAsStringSync(message);
-  } catch (_) {
-    // Si falla la escritura, al menos mostramos el error
-  }
+  } catch (_) {}
 
-  // Mostrar el MessageBox con el mismo error y la ubicación
   final user32 = DynamicLibrary.open('user32.dll');
   final MessageBoxW = user32.lookupFunction<
       Int32 Function(IntPtr hWnd, Pointer<Utf16> lpText, Pointer<Utf16> lpCaption, Int32 uType),
       int Function(int hWnd, Pointer<Utf16> lpText, Pointer<Utf16> lpCaption, int uType)>('MessageBoxW');
 
-  final msg = 'Error fatal (también guardado en error_log.txt):\n\n$message';
+  final msg = 'Error fatal (guardado en error_log.txt):\n\n$message';
   final text = msg.toNativeUtf16();
   final caption = title.toNativeUtf16();
-  MessageBoxW(0, text, caption, 0x00000030); // MB_ICONERROR | MB_OK
+  MessageBoxW(0, text, caption, 0x00000030);
   malloc.free(text);
   malloc.free(caption);
 }
@@ -38,7 +34,13 @@ void guardarYMostrarError(String title, String message) {
 void main() {
   try {
     WidgetsFlutterBinding.ensureInitialized();
-    sqfliteFfiInit();
+
+    // Inicializar SQLite FFI con la DLL que viene en el paquete sqlite3
+    sqfliteFfiInit(sqlite3Path: sqlite3.sqlite3Path);
+
+    // Inicializar la factory global para que DatabaseService la use
+    databaseFactory = databaseFactoryFfi;
+
     AlertService.initialize();
     AlertService.startPeriodicCheck();
 
@@ -56,7 +58,6 @@ void main() {
 
 class MipymeWindowsApp extends StatefulWidget {
   const MipymeWindowsApp({super.key});
-
   @override
   State<MipymeWindowsApp> createState() => _MipymeWindowsAppState();
 }
