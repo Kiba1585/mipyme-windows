@@ -25,4 +25,15 @@ class LicenseInfo {
       deviceId: json['device_id'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'owner_name': ownerName,
+      'phone': phoneNumber,
+      'max_sellers': maxSellers,
+      'expiry_date': expiryDate.toIso8601String(),
+      'plan': planType,
+      'device_id': deviceId,
+    };
+  }
 }
