@@ -24,6 +24,7 @@ import 'bulk_inventory_screen.dart';
 import 'settings_screen.dart';
 import 'analytics_screen.dart';
 import 'audit_log_screen.dart';
+import '../features/intelligence/presentation/intelligence_screen.dart'; // ← NUEVO
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -59,6 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _NavItem(Icons.account_balance_wallet, 'Presupuesto'),
       _NavItem(Icons.insights, 'Predicciones'),
       _NavItem(Icons.analytics, 'Analítica'),
+      _NavItem(Icons.lightbulb, 'Inteligencia'),   // ← NUEVO
     ]),
     _NavGroup('Recursos', [
       _NavItem(Icons.people, 'Nóminas'),
@@ -72,7 +74,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ]),
   ];
 
-  // Mapa de pantallas
+  // Mapa de pantallas (índices actualizados)
   late final Map<int, Widget Function()> _pages = {
     0: () => _buildDashboardContent(),
     1: () => const BulkInventoryScreen(),
@@ -84,12 +86,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     7: () => const BudgetScreen(),
     8: () => const PredictionsScreen(),
     9: () => const AnalyticsScreen(),
-    10: () => const PayrollScreen(),
-    11: () => const AssetsScreen(),
-    12: () => const SuppliersScreen(),
-    13: () => const SyncScreen(),
-    14: () => const SettingsScreen(),
-    15: () => const AuditLogScreen(),
+    10: () => const IntelligenceScreen(),   // ← NUEVA
+    11: () => const PayrollScreen(),
+    12: () => const AssetsScreen(),
+    13: () => const SuppliersScreen(),
+    14: () => const SyncScreen(),
+    15: () => const SettingsScreen(),
+    16: () => const AuditLogScreen(),
   };
 
   int _flatIndex(int groupIdx, int itemIdx) {
@@ -188,11 +191,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: Row(
         children: [
-          // Barra lateral agrupada
           SizedBox(
             width: 220,
             child: Container(
-              color: Theme.of(context).colorScheme.surface, // ← compatible
+              color: Theme.of(context).colorScheme.surface,
               child: Column(
                 children: [
                   const Padding(
@@ -243,7 +245,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _pages[_selectedIndex]?.call() ?? const SizedBox.shrink(), // ← nunca null
+                : _pages[_selectedIndex]?.call() ?? const SizedBox.shrink(),
           ),
         ],
       ),
