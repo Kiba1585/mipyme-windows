@@ -4,7 +4,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sqlite3/sqlite3.dart' as sqlite3;   // ← para obtener la ruta de la DLL
+// Ya NO necesitamos importar sqlite3 porque sqlite3_flutter_libs se encarga
 import 'screens/activation_screen.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_scope.dart';
@@ -35,10 +35,7 @@ void main() {
   try {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Inicializar SQLite FFI con la DLL que viene en el paquete sqlite3
-    sqfliteFfiInit(sqlite3Path: sqlite3.sqlite3Path);
-
-    // Inicializar la factory global para que DatabaseService la use
+    sqfliteFfiInit();                  // sqlite3_flutter_libs provee la DLL
     databaseFactory = databaseFactoryFfi;
 
     AlertService.initialize();
