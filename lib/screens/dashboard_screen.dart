@@ -40,6 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _loading = true;
   String? _errorMessage;
   int _selectedIndex = 0;
+  int _expandedGroupIndex = 0;   // solo un grupo expandido a la vez
 
   double _totalIncome = 0;
   double _totalExpenses = 0;
@@ -132,7 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       MaterialPageRoute(builder: (_) => const ActivationScreen()),
     );
     if (result == true) {
-      _loadOwners(); // recargar lista de dueños y dashboard
+      _loadOwners();
     }
   }
 
@@ -247,7 +248,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         final groupIdx = groupEntry.key;
                         final group = groupEntry.value;
                         return ExpansionTile(
-                          initiallyExpanded: true,
+                          initiallyExpanded: groupIdx == _expandedGroupIndex,
+                          onExpansionChanged: (expanded) {
+                            setState(() {
+                              _expandedGroupIndex = expanded ? groupIdx : -1;
+                            });
+                          },
                           leading: Icon(group.items.first.icon),
                           title: Text(group.title, style: const TextStyle(fontWeight: FontWeight.bold)),
                           children: group.items.asMap().entries.map((itemEntry) {
@@ -285,7 +291,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ... (resto del dashboard: _buildDashboardContent, _buildKpiCard, _buildButton) igual que antes
   Widget _buildDashboardContent() {
     if (_errorMessage != null) {
       return Center(
