@@ -20,13 +20,9 @@ class IntelligenceService {
 
     Map<String, double> profitMap = {};
     for (final product in products) {
-      final code = product['product_code'] as String;
       final name = product['name'] as String;
       final price = (product['price'] as num).toDouble();
-      final cost = (product['cost'] as num?)?.toDouble() ?? 0;
-
-      // Obtener ventas de este producto (asumiendo que usas financial_records o tabla sales)
-      // Por ahora usamos la cantidad en inventario como proxy (esto lo mejorarás con la tabla de ventas)
+      final cost = (product['cost'] as num?)?.toDouble() ?? 0.0;
       final stock = (product['stock'] as num).toDouble();
       final profit = (price - cost) * stock; // beneficio potencial
       profitMap[name] = profit;
@@ -43,9 +39,8 @@ class IntelligenceService {
     );
   }
 
-  /// Hora con más ventas (requiere tabla de ventas; por ahora devolvemos un placeholder)
+  /// Hora con más ventas (placeholder)
   static Future<BusinessInsight?> getPeakSalesHour() async {
-    // TODO: cuando tengas tabla de ventas con hora, consultar
     return BusinessInsight(
       title: 'Hora pico de ventas',
       value: '10:00 AM - 12:00 PM',
@@ -54,12 +49,11 @@ class IntelligenceService {
     );
   }
 
-  /// Productos con rotación más lenta (menos vendidos, alto stock)
+  /// Productos con rotación más lenta (stock alto)
   static Future<List<BusinessInsight>> getSlowProducts() async {
     final products = await DatabaseService.getProducts();
     if (products.isEmpty) return [];
 
-    // Productos con stock alto y precio bajo (aproximación)
     final slow = products
         .where((p) => (p['stock'] as num).toDouble() > 20)
         .map((p) => BusinessInsight(
@@ -74,17 +68,20 @@ class IntelligenceService {
 
   // ==================== PREDICCIONES ====================
 
-  /// Productos que se agotarán pronto (basado en stock bajo)
+  /// Productos que se agotarán pronto (stock bajo)
   static Future<List<ProductPrediction>> getSoonOutOfStock() async {
     final products = await DatabaseService.getProducts();
     return products
         .where((p) => (p['stock'] as num).toDouble() < 10)
-        .map((p) => ProductPrediction(
-              productName: p['name'] as String,
-              currentStock: (p['stock'] as num).toDouble(),
-              dailyConsumption: 2.0, // estimación genérica
-              daysUntilStockout: ((p['stock'] as num).toDouble() / 2).ceil(),
-            ))
+        .map((p) {
+          final stock = (p['stock'] as num).toDouble();
+          return ProductPrediction(
+            productName: p['name'] as String,
+            currentStock: stock,
+            dailyConsumption: 2.0,
+            daysUntilStockout: (stock / 2).ceil(),
+          );
+        })
         .toList();
   }
 
@@ -115,7 +112,7 @@ class IntelligenceService {
     return SalesTrend(direction: direction, changePercent: change, suggestion: suggestion);
   }
 
-  /// Sugerencia de compra (productos con stock crítico)
+  /// Sugerencia de compra
   static Future<String> getPurchaseSuggestion() async {
     final lowStock = await getSoonOutOfStock();
     if (lowStock.isEmpty) return 'Inventario saludable. No se requieren compras urgentes.';
@@ -155,13 +152,10 @@ class IntelligenceService {
       }
     }
 
-    // Caja descuadrada (placeholder, necesitarías registrar cierres de caja)
-    // Aquí podrías comparar ingresos del día vs efectivo en caja.
-
-    // Gastos anormales (ej: categoría "Insumos" subió más de 50%)
+    // Gastos elevados por categoría
     final expenses = await AnalyticsService.getExpensesByCategory();
     for (final cat in expenses) {
-      if (cat.amount > 10000) { // umbral genérico
+      if (cat.amount > 10000) {
         alerts.add(SmartAlert(
           title: 'Gasto elevado en ${cat.category}',
           description: '\$${cat.amount.toStringAsFixed(2)} este mes.',
