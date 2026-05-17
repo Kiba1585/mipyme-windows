@@ -9,22 +9,18 @@ import '../domain/smart_alert.dart';
 class IntelligenceService {
   // ==================== ANÁLISIS DE NEGOCIO ====================
 
-  /// Producto más rentable del mes
   static Future<BusinessInsight?> getMostProfitableProduct() async {
     final now = DateTime.now();
-    final monthStart = DateFormat('yyyy-MM-01').format(now);
-    final monthEnd = DateFormat('yyyy-MM-31').format(now);
-
     final products = await DatabaseService.getProducts();
     if (products.isEmpty) return null;
 
-    Map<String, double> profitMap = {};
+    final profitMap = <String, double>{};
     for (final product in products) {
       final name = product['name'] as String;
       final price = (product['price'] as num).toDouble();
       final cost = (product['cost'] as num?)?.toDouble() ?? 0.0;
       final stock = (product['stock'] as num).toDouble();
-      final profit = (price - cost) * stock; // beneficio potencial
+      final profit = (price - cost) * stock;
       profitMap[name] = profit;
     }
 
@@ -39,7 +35,6 @@ class IntelligenceService {
     );
   }
 
-  /// Hora con más ventas (placeholder)
   static Future<BusinessInsight?> getPeakSalesHour() async {
     return BusinessInsight(
       title: 'Hora pico de ventas',
@@ -49,26 +44,28 @@ class IntelligenceService {
     );
   }
 
-  /// Productos con rotación más lenta (stock alto)
   static Future<List<BusinessInsight>> getSlowProducts() async {
     final products = await DatabaseService.getProducts();
     if (products.isEmpty) return [];
 
     final slow = products
         .where((p) => (p['stock'] as num).toDouble() > 20)
-        .map((p) => BusinessInsight(
-              title: p['name'] as String,
-              value: 'Stock: ${p['stock']} ${p['unit']}',
-              subtitle: 'Posible exceso de inventario',
-              type: InsightType.warning,
-            ))
+        .map((p) {
+          final stock = (p['stock'] as num).toDouble();
+          final unit = p['unit'] as String;
+          return BusinessInsight(
+            title: p['name'] as String,
+            value: 'Stock: $stock $unit',
+            subtitle: 'Posible exceso de inventario',
+            type: InsightType.warning,
+          );
+        })
         .toList();
     return slow.take(3).toList();
   }
 
   // ==================== PREDICCIONES ====================
 
-  /// Productos que se agotarán pronto (stock bajo)
   static Future<List<ProductPrediction>> getSoonOutOfStock() async {
     final products = await DatabaseService.getProducts();
     return products
@@ -85,7 +82,6 @@ class IntelligenceService {
         .toList();
   }
 
-  /// Tendencia de ventas
   static Future<SalesTrend> getSalesTrend() async {
     final summaries = await PredictionService.getMonthlyHistory();
     if (summaries.length < 2) {
@@ -112,7 +108,6 @@ class IntelligenceService {
     return SalesTrend(direction: direction, changePercent: change, suggestion: suggestion);
   }
 
-  /// Sugerencia de compra
   static Future<String> getPurchaseSuggestion() async {
     final lowStock = await getSoonOutOfStock();
     if (lowStock.isEmpty) return 'Inventario saludable. No se requieren compras urgentes.';
@@ -155,10 +150,12 @@ class IntelligenceService {
     // Gastos elevados por categoría
     final expenses = await AnalyticsService.getExpensesByCategory();
     for (final cat in expenses) {
-      if (cat.amount > 10000) {
+      // cat.amount es double, pero nos aseguramos
+      final amount = (cat.amount as num).toDouble();
+      if (amount > 10000) {
         alerts.add(SmartAlert(
           title: 'Gasto elevado en ${cat.category}',
-          description: '\$${cat.amount.toStringAsFixed(2)} este mes.',
+          description: '\$${amount.toStringAsFixed(2)} este mes.',
           severity: AlertSeverity.warning,
         ));
       }
