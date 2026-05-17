@@ -1,6 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
-import 'package:ffi/ffi.dart';               // ← NECESARIO para Utf16, toNativeUtf16, free
+import 'package:ffi/ffi.dart';               // contiene malloc, Utf16, toNativeUtf16
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -20,8 +20,8 @@ void showNativeError(String title, String message) {
   final text = message.toNativeUtf16();
   final caption = title.toNativeUtf16();
   MessageBoxW(0, text, caption, 0x00000030); // MB_ICONERROR | MB_OK
-  free(text);
-  free(caption);
+  malloc.free(text);    // liberar memoria
+  malloc.free(caption);
 }
 
 void main() {
@@ -32,7 +32,6 @@ void main() {
     AlertService.startPeriodicCheck();
 
     FlutterError.onError = (details) {
-      // Mostrar errores de Flutter en consola (y en MessageBox si prefieres)
       debugPrint(details.exceptionAsString());
     };
 
