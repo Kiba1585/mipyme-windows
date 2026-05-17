@@ -441,6 +441,64 @@ class DatabaseService {
     return await db.query('products', orderBy: 'name');
   }
 
+  /// Busca un producto por su código exacto
+  static Future<Map<String, dynamic>?> getProductByCode(String code) async {
+    final db = await database;
+    final maps = await db.query('products',
+        where: 'product_code = ?', whereArgs: [code]);
+    if (maps.isEmpty) return null;
+    return maps.first;
+  }
+
+  /// Inserta o actualiza un producto promediando cantidad, precio y costo si ya existe
+  static Future<void> upsertProduct({
+    required String productCode,
+    required String name,
+    required String category,
+    required double price,
+    double? cost,
+    required double stock,
+    required String unit,
+  }) async {
+    final db = await database;
+    final existing = await getProductByCode(productCode);
+
+    if (existing != null) {
+      // Promediar con los valores existentes
+      final newStock = ((existing['stock'] as double) + stock) / 2;
+      final newPrice = ((existing['price'] as double) + price) / 2;
+      final existingCost = existing['cost'] as double?;
+      final newCost = (existingCost != null && cost != null)
+          ? (existingCost + cost) / 2
+          : cost ?? existingCost;
+
+      await db.update(
+        'products',
+        {
+          'name': name,
+          'category': category,
+          'price': newPrice,
+          'cost': newCost,
+          'stock': newStock,
+          'unit': unit,
+        },
+        where: 'product_code = ?',
+        whereArgs: [productCode],
+      );
+    } else {
+      // Insertar nuevo producto
+      await db.insert('products', {
+        'product_code': productCode,
+        'name': name,
+        'category': category,
+        'price': price,
+        'cost': cost,
+        'stock': stock,
+        'unit': unit,
+      });
+    }
+  }
+
   // ==================== AUDIT LOGS ====================
   static Future<void> addAuditLog({
     required String action,
