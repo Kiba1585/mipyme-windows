@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../services/database_service.dart';
 import '../services/inventory_export_service.dart';
 
@@ -13,14 +12,17 @@ class BulkInventoryScreen extends StatefulWidget {
 class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
   final _formKey = GlobalKey<FormState>();
   List<Map<String, dynamic>> _products = [];
+
   final _codeCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _categoryCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _costCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
-  final _unitCtrl = TextEditingController(text: '');   // ← vacío por defecto
+  final _unitCtrl = TextEditingController(text: ''); // vacío por defecto
+
   bool _loading = true;
+  bool _verifying = false;          // para mostrar un indicador mientras se verifica
 
   @override
   void initState() {
@@ -39,7 +41,55 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
     }
   }
 
-  void _addProduct() async {
+  /// Busca el código en la base de datos y, si existe, rellena los campos
+  Future<void> _verifyCode() async {
+    final code = _codeCtrl.text.trim();
+    if (code.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingrese un código primero')),
+      );
+      return;
+    }
+
+    setState(() => _verifying = true);
+    final existing = await DatabaseService.getProductByCode(code);
+    setState(() => _verifying = false);
+
+    if (existing != null) {
+      _nameCtrl.text = existing['name'] as String;
+      _categoryCtrl.text = existing['category'] as String;
+      _unitCtrl.text = existing['unit'] as String;
+
+      // Mostrar precio y costo existentes (pueden modificarse)
+      _priceCtrl.text = (existing['price'] as num).toStringAsFixed(2);
+      final existingCost = existing['cost'];
+      if (existingCost != null) {
+        _costCtrl.text = (existingCost as num).toStringAsFixed(2);
+      } else {
+        _costCtrl.clear();
+      }
+
+      // Stock se deja vacío para que el usuario indique la cantidad a añadir
+      _stockCtrl.clear();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Código existente. Campos rellenados. Modifique precio/costo si lo desea.')),
+      );
+    } else {
+      // Si no existe, limpiamos los campos (excepto código)
+      _nameCtrl.clear();
+      _categoryCtrl.clear();
+      _priceCtrl.clear();
+      _costCtrl.clear();
+      _stockCtrl.clear();
+      _unitCtrl.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Código nuevo. Complete todos los campos.')),
+      );
+    }
+  }
+
+  Future<void> _addProduct() async {
     if (!_formKey.currentState!.validate()) return;
 
     final code = _codeCtrl.text.trim();
@@ -50,26 +100,32 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
     final stock = double.tryParse(_stockCtrl.text.trim()) ?? 0;
     final unit = _unitCtrl.text.trim();
 
+    if (stock <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La cantidad a añadir debe ser mayor a 0')),
+      );
+      return;
+    }
+
     await DatabaseService.upsertProduct(
       productCode: code,
       name: name,
       category: category,
       price: price,
       cost: cost,
-      stock: stock,
+      stock: stock,        // esta cantidad se sumará al stock existente
       unit: unit,
     );
 
-    // Limpiar campos
+    // Limpiar todos los campos
     _codeCtrl.clear();
     _nameCtrl.clear();
     _categoryCtrl.clear();
     _priceCtrl.clear();
     _costCtrl.clear();
     _stockCtrl.clear();
-    _unitCtrl.clear();   // queda vacío
+    _unitCtrl.clear();
 
-    // Recargar lista desde la base de datos
     _loadProducts();
   }
 
@@ -119,12 +175,30 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
               key: _formKey,
               child: Column(
                 children: [
-                  TextFormField(
-                    controller: _codeCtrl,
-                    decoration: const InputDecoration(labelText: 'Código', border: OutlineInputBorder()),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
+                  // Código + botón Verificar
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _codeCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Código',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _verifying ? null : _verifyCode,
+                        child: _verifying
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Text('Verificar'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
+
                   TextFormField(
                     controller: _nameCtrl,
                     decoration: const InputDecoration(labelText: 'Nombre', border: OutlineInputBorder()),
@@ -163,7 +237,11 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: _stockCtrl,
-                          decoration: const InputDecoration(labelText: 'Cantidad', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(
+                            labelText: 'Cantidad a añadir',
+                            border: OutlineInputBorder(),
+                            hintText: 'Se sumará al stock existente',
+                          ),
                           keyboardType: TextInputType.number,
                           validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
                         ),
@@ -172,7 +250,11 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: _unitCtrl,
-                          decoration: const InputDecoration(labelText: 'Unidad', border: OutlineInputBorder(), hintText: 'Ej. kg, litro'),
+                          decoration: const InputDecoration(
+                            labelText: 'Unidad',
+                            border: OutlineInputBorder(),
+                            hintText: 'Ej. kg, litro',
+                          ),
                         ),
                       ),
                     ],
@@ -192,7 +274,7 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
             ),
           ),
 
-          // Lista de productos (desde la base de datos)
+          // Lista de productos
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -205,12 +287,6 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
                           return ListTile(
                             title: Text(product['name'] as String),
                             subtitle: Text('Código: ${product['product_code']} | Stock: ${product['stock']} ${product['unit']}'),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () async {
-                                // Podrías añadir una función de eliminar en DatabaseService si es necesario
-                              },
-                            ),
                           );
                         },
                       ),
