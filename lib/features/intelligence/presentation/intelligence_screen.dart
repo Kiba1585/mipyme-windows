@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../services/intelligence_service.dart' as svc;
-import '../../domain/business_insight.dart';
-import '../../domain/prediction.dart';
-import '../../domain/smart_alert.dart';
+import '../services/intelligence_service.dart' as svc;               // ← corregido
+import '../domain/business_insight.dart';                             // ← corregido
+import '../domain/prediction.dart';                                   // ← corregido
+import '../domain/smart_alert.dart';                                  // ← corregido
 import 'widgets/insight_card.dart';
 import 'widgets/prediction_card.dart';
 import 'widgets/alert_card.dart';
@@ -77,7 +77,6 @@ class _IntelligenceScreenState extends State<IntelligenceScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Sección Análisis
                       const Text('Análisis de negocio', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       if (mostProfitable != null) InsightCard(insight: mostProfitable!),
@@ -86,7 +85,6 @@ class _IntelligenceScreenState extends State<IntelligenceScreen> {
 
                       const SizedBox(height: 24),
 
-                      // Sección Predicciones
                       if (salesTrend != null)
                         PredictionCard(
                           products: outOfStock,
@@ -96,7 +94,6 @@ class _IntelligenceScreenState extends State<IntelligenceScreen> {
 
                       const SizedBox(height: 24),
 
-                      // Sección Alertas
                       const Text('Alertas inteligentes', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       if (alerts.isEmpty)
