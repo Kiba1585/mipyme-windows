@@ -7,10 +7,10 @@ import '../models/license_info.dart';
 
 class LicenseService {
   static const _storage = FlutterSecureStorage();
-  static const _keyActivated = 'windows_activated';
-  static const _keyLicenseInfo = 'license_info';
+  static const _keyLicenseList = 'license_list';   // lista de dueños en JSON
+  static const _keyActiveOwner = 'active_owner';   // índice del dueño activo
 
-  // CLAVE PÚBLICA DEL DISTRIBUIDOR (debe coincidir con LicGenerator)
+  // CLAVE PÚBLICA DEL DISTRIBUIDOR
   static const String _distributorPublicKeyPem =
       '-----BEGIN RSA PUBLIC KEY-----\n'
       'yzLm8/QmULq+Qa8RhW260tTOhsZwI7by8v+CmMaRP9fksX1St+0eRV/l8Q72s3bqKzTbcl7+irLhsPLaVJKGCeceFN0aZM77Y4dVIoSltBBhMOQS0G33YAsj/5817HZp4oKxprZN22wk8/XP8v2FACHGeQOHisfvBL83h5a3DwQKm2yta1r3mKJI9ujWT5w68fMokj7fYrdToNdIzX2wetk70FBDLf6XPPksY5fgBFE8dg9/JM0D8cqURd/W3cSU5e8EqAvtjKiQ1gJoUyTR0dr4ufDLMNcl/Tcpw3Ma8pHJ5uhGoG6Rv4NNbwJxyzyt6wlTtqaekb6/2cnMyrSWEw==\n'
@@ -18,7 +18,6 @@ class LicenseService {
       '-----END RSA PUBLIC KEY-----';
 
   static RSAPublicKey? _cachedPublicKey;
-
   static RSAPublicKey get _publicKey {
     if (_cachedPublicKey != null) return _cachedPublicKey!;
     _cachedPublicKey = _parsePublicKey(_distributorPublicKeyPem);
@@ -47,24 +46,94 @@ class LicenseService {
         radix: 16);
   }
 
-  static Future<bool> isActivated() async {
-    final val = await _storage.read(key: _keyActivated);
-    return val == 'true';
+  // ==================== GESTIÓN DE MÚLTIPLES DUEÑOS ====================
+
+  /// Obtiene la lista completa de dueños almacenados
+  static Future<List<LicenseInfo>> getAllOwners() async {
+    final jsonStr = await _storage.read(key: _keyLicenseList);
+    if (jsonStr == null || jsonStr.isEmpty) return [];
+    final list = jsonDecode(jsonStr) as List<dynamic>;
+    return list.map((e) => LicenseInfo.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  static Future<LicenseInfo?> getStoredInfo() async {
-    try {
-      final json = await _storage.read(key: _keyLicenseInfo);
-      if (json == null) return null;
-      return LicenseInfo.fromJson(jsonDecode(json));
-    } catch (_) {
-      return null;
+  /// Guarda la lista completa de dueños
+  static Future<void> _saveOwners(List<LicenseInfo> owners) async {
+    final jsonStr = jsonEncode(owners.map((e) => e.toJson()).toList());
+    await _storage.write(key: _keyLicenseList, value: jsonStr);
+  }
+
+  /// Obtiene el dueño activo actual
+  static Future<LicenseInfo?> getActiveOwner() async {
+    final owners = await getAllOwners();
+    if (owners.isEmpty) return null;
+    final activeIndexStr = await _storage.read(key: _keyActiveOwner);
+    final activeIndex = int.tryParse(activeIndexStr ?? '0') ?? 0;
+    if (activeIndex >= 0 && activeIndex < owners.length) {
+      return owners[activeIndex];
+    }
+    // Si no hay índice válido, tomar el primero y actualizar
+    if (owners.isNotEmpty) {
+      await _storage.write(key: _keyActiveOwner, value: '0');
+      return owners.first;
+    }
+    return null;
+  }
+
+  /// Establece el dueño activo por su índice en la lista
+  static Future<void> setActiveOwner(int index) async {
+    await _storage.write(key: _keyActiveOwner, value: index.toString());
+  }
+
+  /// Añade una nueva licencia (o selecciona una existente) y la establece como activa
+  static Future<void> addLicense(LicenseInfo info) async {
+    final owners = await getAllOwners();
+    // Buscar si ya existe uno con el mismo nombre y teléfono
+    final existingIndex = owners.indexWhere(
+      (o) => o.ownerName == info.ownerName && o.phoneNumber == info.phoneNumber,
+    );
+    if (existingIndex != -1) {
+      // Actualizar los datos (por si la licencia se renovó)
+      owners[existingIndex] = info;
+      await _saveOwners(owners);
+      await setActiveOwner(existingIndex);
+    } else {
+      owners.add(info);
+      await _saveOwners(owners);
+      await setActiveOwner(owners.length - 1);
     }
   }
 
+  /// Elimina un dueño por su índice (no borra los datos de la base de datos común)
+  static Future<void> removeOwner(int index) async {
+    final owners = await getAllOwners();
+    if (index >= 0 && index < owners.length) {
+      owners.removeAt(index);
+      await _saveOwners(owners);
+      // Ajustar el índice activo
+      final currentActive = int.tryParse(
+            await _storage.read(key: _keyActiveOwner) ?? '0',
+          ) ??
+          0;
+      if (currentActive >= owners.length) {
+        await setActiveOwner(owners.length - 1);
+      } else if (currentActive == index) {
+        // Si se borró el activo, pasar al primero
+        await setActiveOwner(0);
+      }
+    }
+  }
+
+  /// Verifica si hay al menos un dueño guardado
+  static Future<bool> isActivated() async {
+    final owners = await getAllOwners();
+    return owners.isNotEmpty;
+  }
+
+  // ==================== VALIDACIÓN DE CÓDIGO ====================
+
   static LicenseInfo? validateActivationCode(String code) {
+    // 1) Intentar decodificar como base64 simple (nuevo formato)
     try {
-      // Intentar primero como nuevo formato (base64 sin firma)
       final payloadBytes = base64Decode(code.trim());
       final payloadString = utf8.decode(payloadBytes);
       final json = jsonDecode(payloadString) as Map<String, dynamic>;
@@ -79,10 +148,10 @@ class LicenseService {
         );
       }
     } catch (_) {
-      // Si falla, intentar con formato antiguo (payload.firma)
+      // continuar con formato antiguo
     }
 
-    // Validación con RSA (formato antiguo)
+    // 2) Validación con RSA (formato payload.firma)
     try {
       final parts = code.split('.');
       if (parts.length != 2) return null;
@@ -98,7 +167,6 @@ class LicenseService {
       final valid = signer.verifySignature(
           Uint8List.fromList(utf8.encode(payloadString)),
           RSASignature(signatureBytes));
-
       if (!valid) return null;
 
       final json = jsonDecode(payloadString) as Map<String, dynamic>;
@@ -117,24 +185,19 @@ class LicenseService {
     return null;
   }
 
-  static Future<void> saveActivation(String code) async {
-    try {
-      final parts = code.contains('.') ? code.split('.') : ['', code];
-      final payloadBytes = base64Decode(parts.length == 2 ? parts[0] : parts[1]);
-      final payloadString = utf8.decode(payloadBytes);
-      final json = jsonDecode(payloadString) as Map<String, dynamic>;
+  // ==================== COMPATIBILIDAD (si aún se usa) ====================
+  static Future<LicenseInfo?> getStoredInfo() async => getActiveOwner();
 
-      await _storage.write(key: _keyActivated, value: 'true');
-      await _storage.write(key: _keyLicenseInfo, value: jsonEncode(json));
-    } catch (e) {
-      // Si no se puede decodificar, al menos guardamos la activación
-      await _storage.write(key: _keyActivated, value: 'true');
-      rethrow;
+  static Future<void> saveActivation(String code) async {
+    final info = validateActivationCode(code);
+    if (info != null) {
+      await addLicense(info);
     }
   }
 
   static Future<void> deactivate() async {
-    await _storage.delete(key: _keyActivated);
-    await _storage.delete(key: _keyLicenseInfo);
+    // Eliminar la lista completa y el índice activo
+    await _storage.delete(key: _keyLicenseList);
+    await _storage.delete(key: _keyActiveOwner);
   }
 }
