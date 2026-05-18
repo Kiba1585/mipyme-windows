@@ -1,4 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 import '../services/license_service.dart';
 import 'dashboard_screen.dart';
 
@@ -31,13 +36,19 @@ class _ActivationScreenState extends State<ActivationScreen> {
       if (info != null) {
         await LicenseService.addLicense(info);
 
+        // Guardar archivo de chequeo con hash criptográfico
+        final hash = sha256
+            .convert(utf8.encode('${info.ownerName}|${info.phoneNumber}|${info.expiryDate.toIso8601String()}'))
+            .toString();
+        final dir = await getApplicationDocumentsDirectory();
+        final checkFile = File(p.join(dir.path, 'license_check.txt'));
+        await checkFile.writeAsString(hash);
+
         if (!mounted) return;
 
         if (Navigator.canPop(context)) {
-          // Añadir dueño desde el dashboard: volver con éxito
-          Navigator.pop(context, true);
+          Navigator.pop(context, true);   // añadir dueño desde dashboard
         } else {
-          // Primera activación: navegar al dashboard
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const DashboardScreen()),
