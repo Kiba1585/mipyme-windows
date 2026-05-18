@@ -3,7 +3,11 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:crypto/crypto.dart';            // añadido para hash
+import 'dart:convert';                          // añadido para utf8
 import 'screens/activation_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'core/theme/app_theme.dart';
@@ -99,7 +103,7 @@ class _MipymeWindowsAppState extends State<MipymeWindowsApp> {
   }
 }
 
-/// Pantalla que decide a dónde ir según si ya hay dueños guardados
+/// Pantalla que decide a dónde ir según si ya hay dueños guardados y el hash coincide
 class StartupScreen extends StatefulWidget {
   const StartupScreen({super.key});
 
@@ -115,19 +119,41 @@ class _StartupScreenState extends State<StartupScreen> {
   }
 
   Future<void> _checkLicense() async {
-    final activated = await LicenseService.isActivated();
-    if (!mounted) return;
-    if (activated) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const ActivationScreen()),
-      );
+    // 1) Obtener dueños desde almacenamiento seguro
+    final owners = await LicenseService.getAllOwners();
+    if (owners.isNotEmpty) {
+      // Tenemos dueños guardados, verificar hash de archivo
+      final owner = await LicenseService.getActiveOwner() ?? owners.first;
+      final expectedHash = sha256
+          .convert(utf8.encode('${owner.ownerName}|${owner.phoneNumber}|${owner.expiryDate.toIso8601String()}'))
+          .toString();
+
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final checkFile = File(p.join(dir.path, 'license_check.txt'));
+        if (await checkFile.exists()) {
+          final savedHash = await checkFile.readAsString();
+          if (savedHash.trim() == expectedHash) {
+            // Hash válido → ir al dashboard
+            if (!mounted) return;
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const DashboardScreen()),
+            );
+            return;
+          }
+        }
+      } catch (_) {}
+      // Si el archivo no existe o el hash no coincide, borrar dueños y forzar reactivación
+      await LicenseService.deactivate();
     }
+
+    // Si no hay dueños o el hash era inválido, mostrar activación
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const ActivationScreen()),
+    );
   }
 
   @override
