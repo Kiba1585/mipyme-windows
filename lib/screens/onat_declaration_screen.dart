@@ -13,8 +13,15 @@ class OnatDeclarationScreen extends StatefulWidget {
 class _OnatDeclarationScreenState extends State<OnatDeclarationScreen> {
   final DateFormat _monthFormat = DateFormat('yyyy-MM');
   DateTime _selectedDate = DateTime.now();
-  double _grossIncome = 0;
-  double _totalExpenses = 0;
+
+  // Valores reales (cargados de la base de datos)
+  double _realGrossIncome = 0;
+  double _realTotalExpenses = 0;
+
+  // Valores reportados (el usuario los modifica)
+  final _reportedIncomeCtrl = TextEditingController();
+  final _reportedExpensesCtrl = TextEditingController();
+
   bool _loading = true;
   String? _error;
 
@@ -33,8 +40,12 @@ class _OnatDeclarationScreenState extends State<OnatDeclarationScreen> {
       final period = _monthFormat.format(_selectedDate);
       final startDate = '$period-01';
       final endDate = '$period-31';
-      _grossIncome = await DatabaseService.getTotalByType('income', startDate, endDate);
-      _totalExpenses = await DatabaseService.getTotalByType('expense', startDate, endDate);
+      _realGrossIncome = await DatabaseService.getTotalByType('income', startDate, endDate);
+      _realTotalExpenses = await DatabaseService.getTotalByType('expense', startDate, endDate);
+
+      // Inicializar los campos reportados con los valores reales
+      _reportedIncomeCtrl.text = _realGrossIncome.toStringAsFixed(2);
+      _reportedExpensesCtrl.text = _realTotalExpenses.toStringAsFixed(2);
     } catch (e) {
       _error = 'Error al cargar declaración.\n$e';
     } finally {
@@ -55,10 +66,27 @@ class _OnatDeclarationScreenState extends State<OnatDeclarationScreen> {
     }
   }
 
+  /// Calcula el impuesto (5 % del neto positivo)
+  double _calculateTax(double income, double expenses) {
+    final net = income - expenses;
+    return net > 0 ? net * 0.05 : 0.0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final period = _monthFormat.format(_selectedDate);
-    final netIncome = _grossIncome - _totalExpenses;
+
+    // Valores reales
+    final realNetIncome = _realGrossIncome - _realTotalExpenses;
+    final realTax = _calculateTax(_realGrossIncome, _realTotalExpenses);
+
+    // Valores reportados
+    final reportedIncome =
+        double.tryParse(_reportedIncomeCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+    final reportedExpenses =
+        double.tryParse(_reportedExpensesCtrl.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+    final reportedNet = reportedIncome - reportedExpenses;
+    final reportedTax = _calculateTax(reportedIncome, reportedExpenses);
 
     return Scaffold(
       appBar: AppBar(
@@ -73,42 +101,101 @@ class _OnatDeclarationScreenState extends State<OnatDeclarationScreen> {
               ? _buildError()
               : Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Período: $period',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 24),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Ingresos Brutos: \$${_grossIncome.toStringAsFixed(2)}'),
-                              Text('Gastos Deducibles: \$${_totalExpenses.toStringAsFixed(2)}'),
-                              const Divider(),
-                              Text('Ingreso Neto: \$${netIncome.toStringAsFixed(2)}'),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Impuesto a Pagar (est.): \$${(netIncome > 0 ? netIncome * 0.05 : 0).toStringAsFixed(2)}',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ],
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Período: $period',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 24),
+
+                        // ─── SECCIÓN REAL ──────────────────────────────────
+                        Card(
+                          color: Colors.blue.shade50,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('📊 VALORES REALES (según registros)',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                const Divider(),
+                                Text('Ingresos Brutos: \$${_realGrossIncome.toStringAsFixed(2)}'),
+                                Text('Gastos Deducibles: \$${_realTotalExpenses.toStringAsFixed(2)}'),
+                                const Divider(),
+                                Text('Ingreso Neto: \$${realNetIncome.toStringAsFixed(2)}'),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Impuesto (5 %): \$${realTax.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const Spacer(),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: ElevatedButton.icon(
-                          onPressed: () => OnatAdvancedService.generateDj01(period),
-                          icon: const Icon(Icons.picture_as_pdf),
-                          label: const Text('Exportar Declaración (PDF)'),
+
+                        const SizedBox(height: 24),
+
+                        // ─── SECCIÓN REPORTADA ────────────────────────────
+                        Card(
+                          color: Colors.orange.shade50,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('📝 VALORES A REPORTAR (ajústelos manualmente)',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                const Divider(),
+                                TextField(
+                                  controller: _reportedIncomeCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Ingresos a reportar',
+                                    border: OutlineInputBorder(),
+                                    prefixText: '\$ ',
+                                  ),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _reportedExpensesCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Gastos a reportar',
+                                    border: OutlineInputBorder(),
+                                    prefixText: '\$ ',
+                                  ),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                ),
+                                const Divider(),
+                                Text('Ingreso Neto reportado: \$${reportedNet.toStringAsFixed(2)}'),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Impuesto a pagar (est.): \$${reportedTax.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+
+                        const SizedBox(height: 32),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: () => OnatAdvancedService.generateDj01(
+                              period,
+                              realIncome: _realGrossIncome,
+                              realExpenses: _realTotalExpenses,
+                              reportedIncome: reportedIncome,
+                              reportedExpenses: reportedExpenses,
+                            ),
+                            icon: const Icon(Icons.picture_as_pdf),
+                            label: const Text('Exportar Declaración (PDF)'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
     );
