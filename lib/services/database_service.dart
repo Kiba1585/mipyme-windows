@@ -447,6 +447,10 @@ class DatabaseService {
     return maps.first;
   }
 
+  /// Inserta o actualiza un producto con las reglas:
+  /// - Stock se suma.
+  /// - Precio se reemplaza con el último ingresado.
+  /// - Costo se promedia ponderadamente.
   static Future<void> upsertProduct({
     required String productCode,
     required String name,
@@ -460,13 +464,22 @@ class DatabaseService {
     final existing = await getProductByCode(productCode);
 
     if (existing != null) {
-      final newPrice = ((existing['price'] as double) + price) / 2;
-      final existingCost = existing['cost'] as double?;
-      final newCost = (existingCost != null && cost != null)
-          ? (existingCost + cost) / 2
-          : cost ?? existingCost;
+      final double oldStock = (existing['stock'] as double);
+      final double newStock = oldStock + stock;
 
-      final newStock = (existing['stock'] as double) + stock;
+      // El precio se reemplaza por el nuevo
+      final double newPrice = price;
+
+      // Costo promedio ponderado
+      double? newCost;
+      final double? oldCost = existing['cost'] as double?;
+      if (oldCost != null && cost != null && newStock > 0) {
+        newCost = ((oldCost * oldStock) + (cost * stock)) / newStock;
+      } else if (cost != null) {
+        newCost = cost;
+      } else {
+        newCost = oldCost; // mantener el existente (o null)
+      }
 
       await db.update(
         'products',
@@ -482,6 +495,7 @@ class DatabaseService {
         whereArgs: [productCode],
       );
     } else {
+      // Producto nuevo: se inserta tal cual
       await db.insert('products', {
         'product_code': productCode,
         'name': name,
@@ -494,7 +508,6 @@ class DatabaseService {
     }
   }
 
-  // ==================== NUEVO MÉTODO PARA ELIMINAR PRODUCTO ====================
   static Future<void> deleteProduct(int id) async {
     final db = await database;
     await db.delete('products', where: 'id = ?', whereArgs: [id]);
