@@ -24,10 +24,15 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
   bool _loading = true;
   bool _verifying = false;
 
+  // Para el autocompletado del nombre
+  List<Map<String, dynamic>> _nameSuggestions = [];
+  bool _nameSelected = false; // evita disparar el autocompletado si ya se seleccionó
+
   @override
   void initState() {
     super.initState();
     _loadProducts();
+    _nameCtrl.addListener(_onNameChanged);
   }
 
   Future<void> _loadProducts() async {
@@ -39,6 +44,40 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  void _onNameChanged() {
+    if (_nameSelected) {
+      _nameSelected = false;
+      return;
+    }
+    final query = _nameCtrl.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      setState(() => _nameSuggestions = []);
+      return;
+    }
+    setState(() {
+      _nameSuggestions = _products
+          .where((p) => (p['name'] as String).toLowerCase().contains(query))
+          .toList();
+    });
+  }
+
+  void _selectNameSuggestion(Map<String, dynamic> existing) {
+    _nameSelected = true;
+    _nameCtrl.text = existing['name'] as String;
+    _codeCtrl.text = existing['product_code'] as String;
+    _categoryCtrl.text = existing['category'] as String;
+    _unitCtrl.text = existing['unit'] as String;
+    _priceCtrl.text = (existing['price'] as num).toStringAsFixed(2);
+    final existingCost = existing['cost'];
+    if (existingCost != null) {
+      _costCtrl.text = (existingCost as num).toStringAsFixed(2);
+    } else {
+      _costCtrl.clear();
+    }
+    _stockCtrl.clear(); // el usuario pone la cantidad nueva
+    setState(() => _nameSuggestions = []);
   }
 
   Future<void> _verifyCode() async {
@@ -58,7 +97,6 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
       _nameCtrl.text = existing['name'] as String;
       _categoryCtrl.text = existing['category'] as String;
       _unitCtrl.text = existing['unit'] as String;
-
       _priceCtrl.text = (existing['price'] as num).toStringAsFixed(2);
       final existingCost = existing['cost'];
       if (existingCost != null) {
@@ -66,9 +104,7 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
       } else {
         _costCtrl.clear();
       }
-
       _stockCtrl.clear();
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Código existente. Campos rellenados.')),
       );
@@ -103,6 +139,7 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
       return;
     }
 
+    // upsertProduct ahora debe sumar stock, reemplazar precio y promediar costo
     await DatabaseService.upsertProduct(
       productCode: code,
       name: name,
@@ -152,6 +189,7 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
 
   @override
   void dispose() {
+    _nameCtrl.removeListener(_onNameChanged);
     _codeCtrl.dispose();
     _nameCtrl.dispose();
     _categoryCtrl.dispose();
@@ -196,11 +234,35 @@ class _BulkInventoryScreenState extends State<BulkInventoryScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
+                  // --- Campo de nombre con autocompletado ---
                   TextFormField(
                     controller: _nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Nombre', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre',
+                      border: OutlineInputBorder(),
+                    ),
                     validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
                   ),
+                  if (_nameSuggestions.isNotEmpty)
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _nameSuggestions.length,
+                        itemBuilder: (_, i) {
+                          final p = _nameSuggestions[i];
+                          return ListTile(
+                            title: Text(p['name'] as String),
+                            subtitle: Text('Código: ${p['product_code']}'),
+                            onTap: () => _selectNameSuggestion(p),
+                          );
+                        },
+                      ),
+                    ),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _categoryCtrl,
